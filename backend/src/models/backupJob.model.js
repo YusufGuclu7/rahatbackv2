@@ -53,7 +53,7 @@ const backupJobModel = {
       where.scheduleType = filters.scheduleType;
     }
 
-    return prisma.backupJob.findMany({
+    const jobs = await prisma.backupJob.findMany({
       where,
       include: {
         database: {
@@ -71,6 +71,15 @@ const backupJobModel = {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Convert BigInt to string for JSON serialization
+    return jobs.map((job) => ({
+      ...job,
+      BackupHistory: job.BackupHistory.map((history) => ({
+        ...history,
+        fileSize: history.fileSize ? history.fileSize.toString() : null,
+      })),
+    }));
   },
 
   findActiveJobs: async () => {

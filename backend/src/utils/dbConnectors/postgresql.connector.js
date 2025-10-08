@@ -3,8 +3,41 @@ const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs').promises;
 const path = require('path');
+const os = require('os');
 
 const execPromise = promisify(exec);
+
+// PostgreSQL binary path detection
+const getPgBinPath = () => {
+  if (os.platform() === 'win32') {
+    // Windows: Check common PostgreSQL installation paths
+    const commonPaths = [
+      'C:\\Program Files\\PostgreSQL\\16\\bin',
+      'C:\\Program Files\\PostgreSQL\\15\\bin',
+      'C:\\Program Files\\PostgreSQL\\14\\bin',
+      'C:\\Program Files\\PostgreSQL\\13\\bin',
+      'C:\\Program Files (x86)\\PostgreSQL\\16\\bin',
+      'C:\\Program Files (x86)\\PostgreSQL\\15\\bin',
+      'C:\\Program Files (x86)\\PostgreSQL\\14\\bin',
+    ];
+
+    // Return first existing path, or assume it's in PATH
+    const existingPath = commonPaths.find(p => {
+      try {
+        return require('fs').existsSync(path.join(p, 'pg_dump.exe'));
+      } catch {
+        return false;
+      }
+    });
+
+    return existingPath || '';
+  }
+  return ''; // Unix systems: assume in PATH
+};
+
+const PG_BIN_PATH = getPgBinPath();
+const PG_DUMP = PG_BIN_PATH ? path.join(PG_BIN_PATH, 'pg_dump') : 'pg_dump';
+const PSQL = PG_BIN_PATH ? path.join(PG_BIN_PATH, 'psql') : 'psql';
 
 /**
  * Test PostgreSQL database connection
@@ -51,7 +84,7 @@ const createBackup = async (config, outputPath) => {
   };
 
   // Build pg_dump command
-  const command = `pg_dump -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -F p -f "${filePath}"`;
+  const command = `"${PG_DUMP}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -F p -f "${filePath}"`;
 
   try {
     const startTime = Date.now();
@@ -86,7 +119,7 @@ const restoreBackup = async (config, backupFilePath) => {
     PGPASSWORD: config.password,
   };
 
-  const command = `psql -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -f "${backupFilePath}"`;
+  const command = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -f "${backupFilePath}"`;
 
   try {
     const startTime = Date.now();

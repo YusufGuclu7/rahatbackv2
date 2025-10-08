@@ -1,4 +1,5 @@
 const cron = require('node-cron');
+const cronParser = require('cron-parser');
 const { backupJobModel } = require('../models');
 const backupService = require('./backup.service');
 const logger = require('../config/logger');
@@ -26,14 +27,8 @@ const getCronExpression = (scheduleType, customCron = null) => {
  */
 const getNextRunTime = (cronExpression) => {
   try {
-    const schedule = cron.schedule(cronExpression, () => {}, {
-      scheduled: false,
-    });
-
-    // Get next execution date
-    const nextDate = schedule.nextDates(1);
-    schedule.stop();
-
+    const interval = cronParser.parseExpression(cronExpression);
+    const nextDate = interval.next().toDate();
     return nextDate;
   } catch (error) {
     logger.error(`Failed to calculate next run time: ${error.message}`);

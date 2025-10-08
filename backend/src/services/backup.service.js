@@ -1,7 +1,8 @@
 const httpStatus = require('http-status');
 const path = require('path');
 const fs = require('fs').promises;
-const archiver = require('archiver');
+const fsSync = require('fs');
+const zlib = require('zlib');
 const { backupJobModel, backupHistoryModel, databaseModel } = require('../models');
 const { getConnector } = require('../utils/dbConnectors');
 const databaseService = require('./database.service');
@@ -138,7 +139,7 @@ const executeBackup = async (backupJobId) => {
       status: 'success',
       fileName: finalFileName,
       filePath: finalFilePath,
-      fileSize: BigInt(fileSize),
+      fileSize: fileSize, // Keep as number, no BigInt conversion
       duration: result.duration,
       completedAt: new Date(),
     });
@@ -168,20 +169,21 @@ const executeBackup = async (backupJobId) => {
 };
 
 /**
- * Compress backup file
+ * Compress backup file using gzip
  */
 const compressBackup = async (filePath) => {
   const output = `${filePath}.gz`;
-  const outputStream = require('fs').createWriteStream(output);
-  const archive = archiver('gzip', { level: 9 });
+  const inputStream = fsSync.createReadStream(filePath);
+  const outputStream = fsSync.createWriteStream(output);
+  const gzip = zlib.createGzip({ level: 9 });
 
   return new Promise((resolve, reject) => {
-    outputStream.on('close', () => resolve(output));
-    archive.on('error', reject);
+    outputStream.on('finish', () => resolve(output));
+    outputStream.on('error', reject);
+    inputStream.on('error', reject);
+    gzip.on('error', reject);
 
-    archive.pipe(outputStream);
-    archive.file(filePath, { name: path.basename(filePath) });
-    archive.finalize();
+    inputStream.pipe(gzip).pipe(outputStream);
   });
 };
 

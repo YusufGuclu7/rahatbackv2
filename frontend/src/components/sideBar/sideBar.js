@@ -43,6 +43,7 @@ import {
 const menuItems = [
   { text: "Anasayfa", icon: <Home size={22} />, path: "/homepage", badge: 7 },
   { text: "Veritabanları", icon: <Database size={22} />, path: "/databases" },
+  { text: "Backup Jobs", icon: <Calendar size={22} />, path: "/backup-jobs" },
   { text: "GridPage", icon: <Files size={22} />, path: "/user/gridPage" },
   {
     text: "Components",

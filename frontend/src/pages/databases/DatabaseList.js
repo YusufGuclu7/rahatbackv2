@@ -1,18 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { Box, Button, Chip } from '@mui/material';
-import { Database, Plus, RefreshCw, Trash2, Edit, TestTube } from 'lucide-react';
+import { Database, Plus, RefreshCw, Trash2, Edit, TestTube, Clock } from 'lucide-react';
 import Swal from 'sweetalert2';
 import 'ag-grid-community/styles/ag-grid.css';
 import 'ag-grid-community/styles/ag-theme-alpine.css';
 import * as databaseApi from '../../api/database';
 import DatabaseFormModal from './DatabaseFormModal';
+import BackupJobFormModal from './BackupJobFormModal';
 
 const DatabaseList = () => {
   const [rowData, setRowData] = useState([]);
   const [loading, setLoading] = useState(false);
   const [modalOpen, setModalOpen] = useState(false);
   const [selectedDatabase, setSelectedDatabase] = useState(null);
+  const [backupJobModalOpen, setBackupJobModalOpen] = useState(false);
+  const [selectedDatabaseForBackup, setSelectedDatabaseForBackup] = useState(null);
 
   const loadDatabases = async () => {
     setLoading(true);
@@ -69,6 +72,11 @@ const DatabaseList = () => {
         Swal.fire('Hata', 'Silme işlemi başarısız', 'error');
       }
     }
+  };
+
+  const handleCreateBackup = (database) => {
+    setSelectedDatabaseForBackup(database);
+    setBackupJobModalOpen(true);
   };
 
   const columnDefs = [
@@ -147,7 +155,7 @@ const DatabaseList = () => {
     },
     {
       headerName: 'İşlemler',
-      width: 180,
+      width: 230,
       cellRenderer: (params) => {
         return (
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', height: '100%' }}>
@@ -159,6 +167,15 @@ const DatabaseList = () => {
               title="Bağlantıyı Test Et"
             >
               <TestTube size={16} />
+            </Button>
+            <Button
+              size="small"
+              variant="outlined"
+              color="success"
+              onClick={() => handleCreateBackup(params.data)}
+              title="Backup Oluştur"
+            >
+              <Clock size={16} />
             </Button>
             <Button
               size="small"
@@ -234,6 +251,16 @@ const DatabaseList = () => {
           setSelectedDatabase(null);
         }}
         database={selectedDatabase}
+        onSuccess={loadDatabases}
+      />
+
+      <BackupJobFormModal
+        open={backupJobModalOpen}
+        onClose={() => {
+          setBackupJobModalOpen(false);
+          setSelectedDatabaseForBackup(null);
+        }}
+        database={selectedDatabaseForBackup}
         onSuccess={loadDatabases}
       />
     </Box>
