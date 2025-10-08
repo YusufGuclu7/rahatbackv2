@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { Box, Button, Chip } from '@mui/material';
 import { Calendar, Plus, RefreshCw, Trash2, Edit, Play, Pause, History } from 'lucide-react';
@@ -131,7 +131,7 @@ const BackupJobsList = () => {
     azure: 'Azure',
   };
 
-  const columnDefs = [
+  const columnDefs = useMemo(() => [
     {
       headerName: 'Job Adı',
       field: 'name',
@@ -246,7 +246,7 @@ const BackupJobsList = () => {
         );
       },
     },
-  ];
+  ], []);
 
   return (
     <Box sx={{ p: 3 }}>

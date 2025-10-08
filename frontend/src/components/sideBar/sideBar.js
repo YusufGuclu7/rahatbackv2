@@ -44,6 +44,7 @@ const menuItems = [
   { text: "Anasayfa", icon: <Home size={22} />, path: "/homepage", badge: 7 },
   { text: "Veritabanları", icon: <Database size={22} />, path: "/databases" },
   { text: "Backup Jobs", icon: <Calendar size={22} />, path: "/backup-jobs" },
+  { text: "Yedekleme Geçmişi", icon: <ListIcon size={22} />, path: "/backup-history" },
   { text: "GridPage", icon: <Files size={22} />, path: "/user/gridPage" },
   {
     text: "Components",

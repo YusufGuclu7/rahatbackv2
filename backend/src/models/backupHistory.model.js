@@ -105,8 +105,14 @@ const backupHistoryModel = {
       prisma.backupHistory.count({ where }),
     ]);
 
+    // Convert BigInt to string for JSON serialization
+    const serializedResults = results.map((history) => ({
+      ...history,
+      fileSize: history.fileSize ? history.fileSize.toString() : null,
+    }));
+
     return {
-      results,
+      results: serializedResults,
       page,
       limit,
       totalPages: Math.ceil(total / limit),
@@ -171,7 +177,7 @@ const backupHistoryModel = {
       successful,
       failed,
       running: total - successful - failed,
-      totalSize: totalSize._sum.fileSize || 0,
+      totalSize: totalSize._sum.fileSize ? totalSize._sum.fileSize.toString() : '0',
     };
   },
 };

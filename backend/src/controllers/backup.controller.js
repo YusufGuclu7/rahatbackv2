@@ -65,17 +65,17 @@ const getBackupHistory = catchAsync(async (req, res) => {
 });
 
 const getBackupHistoryById = catchAsync(async (req, res) => {
-  const backup = await backupService.getBackupHistoryById(req.params.historyId, req.user.id);
+  const backup = await backupService.getBackupHistoryById(parseInt(req.params.historyId), req.user.id);
   res.send(backup);
 });
 
 const downloadBackup = catchAsync(async (req, res) => {
-  const { filePath, fileName } = await backupService.getBackupFilePath(req.params.historyId, req.user.id);
+  const { filePath, fileName } = await backupService.getBackupFilePath(parseInt(req.params.historyId), req.user.id);
   res.download(filePath, fileName);
 });
 
 const deleteBackup = catchAsync(async (req, res) => {
-  await backupService.deleteBackup(req.params.historyId, req.user.id);
+  await backupService.deleteBackup(parseInt(req.params.historyId), req.user.id);
   res.status(httpStatus.NO_CONTENT).send();
 });
 

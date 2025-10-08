@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { Box, Button, Chip } from '@mui/material';
 import { Database, Plus, RefreshCw, Trash2, Edit, TestTube, Clock } from 'lucide-react';
@@ -79,7 +79,7 @@ const DatabaseList = () => {
     setBackupJobModalOpen(true);
   };
 
-  const columnDefs = [
+  const columnDefs = useMemo(() => [
     {
       headerName: 'Ad',
       field: 'name',
@@ -199,7 +199,7 @@ const DatabaseList = () => {
         );
       },
     },
-  ];
+  ], []);
 
   return (
     <Box sx={{ p: 3 }}>

@@ -17,6 +17,7 @@ import AdminUsers from "./pages/adminPage/adminUsers.js";
 import AdminSettings from "./pages/adminPage/adminProfilePage.js";
 import DatabaseList from "./pages/databases/DatabaseList.js";
 import BackupJobsList from "./pages/backupJobs/BackupJobsList.js";
+import BackupHistoryList from "./pages/backupHistory/BackupHistoryList.js";
 import "./App.css";
 import { jwtDecode } from "jwt-decode";
 
@@ -119,6 +120,7 @@ function AppRoutes() {
         <Route path="user/profile" element={<ProfilePage />} />
         <Route path="databases" element={<DatabaseList />} />
         <Route path="backup-jobs" element={<BackupJobsList />} />
+        <Route path="backup-history" element={<BackupHistoryList />} />
         <Route path="user/gridPage" element={<GridPage />} />
         <Route path="user/components" element={<ComponentsPage />} />
       </Route>
