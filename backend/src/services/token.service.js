@@ -70,16 +70,36 @@ const verifyToken = async (token, type) => {
 };
 
 /**
+ * Generate token with user role
+ * @param {number} userId
+ * @param {string} role
+ * @param {Moment} expires
+ * @param {string} type
+ * @param {string} [secret]
+ * @returns {string}
+ */
+const generateTokenWithRole = (userId, role, expires, type, secret = config.jwt.secret) => {
+  const payload = {
+    sub: userId,
+    role: role,
+    iat: moment().unix(),
+    exp: expires.unix(),
+    type,
+  };
+  return jwt.sign(payload, secret);
+};
+
+/**
  * Generate auth tokens
  * @param {import('@prisma/client').User} user
  * @returns {Promise<Object>}
  */
 const generateAuthTokens = async (user) => {
   const accessTokenExpires = moment().add(config.jwt.accessExpirationMinutes, 'minutes');
-  const accessToken = generateToken(user.id, accessTokenExpires, tokenTypes.ACCESS);
+  const accessToken = generateTokenWithRole(user.id, user.role, accessTokenExpires, tokenTypes.ACCESS);
 
   const refreshTokenExpires = moment().add(config.jwt.refreshExpirationDays, 'days');
-  const refreshToken = generateToken(user.id, refreshTokenExpires, tokenTypes.REFRESH);
+  const refreshToken = generateTokenWithRole(user.id, user.role, refreshTokenExpires, tokenTypes.REFRESH);
   await saveToken(refreshToken, user.id, refreshTokenExpires, tokenTypes.REFRESH);
 
   return {

@@ -37,10 +37,12 @@ import {
   List as ListIcon,
   FileText as User,
   Key,
+  Database,
 } from "tabler-icons-react";
 
 const menuItems = [
   { text: "Anasayfa", icon: <Home size={22} />, path: "/homepage", badge: 7 },
+  { text: "Veritabanları", icon: <Database size={22} />, path: "/databases" },
   { text: "GridPage", icon: <Files size={22} />, path: "/user/gridPage" },
   {
     text: "Components",

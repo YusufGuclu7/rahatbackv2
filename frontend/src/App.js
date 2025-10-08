@@ -15,6 +15,7 @@ import ProfilePage from "./pages/profilePage/userProfile.js";
 import AdminPage from "./pages/adminPage/adminPage.js";
 import AdminUsers from "./pages/adminPage/adminUsers.js";
 import AdminSettings from "./pages/adminPage/adminProfilePage.js";
+import DatabaseList from "./pages/databases/DatabaseList.js";
 import "./App.css";
 import { jwtDecode } from "jwt-decode";
 
@@ -52,24 +53,37 @@ function AppRoutes() {
   useEffect(() => {
     const checkAuth = async () => {
       const jwtToken = cookies.get("jwt-access");
+      const publicRoutes = ["/register", "/forgot-password", "/login"];
 
       if (jwtToken) {
-        const decodedToken = jwtDecode(jwtToken);
-        const userRole = decodedToken.role;
-        if (userRole === "admin" && !location.pathname.startsWith("/admin")) {
-          navigate("/admin");
-        } else if (
-          userRole === "user" &&
-          location.pathname.startsWith("/admin")
-        ) {
-          navigate("/NotFound");
+        try {
+          const decodedToken = jwtDecode(jwtToken);
+          const userRole = decodedToken.role;
+
+          // If on login page with valid token, redirect to home
+          if (publicRoutes.includes(location.pathname)) {
+            navigate("/homepage");
+            setIsLoading(false);
+            return;
+          }
+
+          if (userRole === "admin" && !location.pathname.startsWith("/admin")) {
+            // Admin can access both admin and user routes
+          } else if (
+            userRole === "user" &&
+            location.pathname.startsWith("/admin")
+          ) {
+            navigate("/NotFound");
+          }
+        } catch (error) {
+          console.error("Invalid token:", error);
+          cookies.remove("jwt-access");
+          cookies.remove("jwt-refresh");
+          navigate("/login");
         }
-      } else if (!jwtToken) {
-        if (
-          !["/register", "/forgot-password", "/login"].includes(
-            location.pathname
-          )
-        ) {
+      } else {
+        // No token - redirect to login unless on public route
+        if (!publicRoutes.includes(location.pathname)) {
           navigate("/login");
         }
       }
@@ -77,7 +91,7 @@ function AppRoutes() {
     };
 
     checkAuth();
-  }, [navigate, location]);
+  }, [navigate, location.pathname]);
 
   if (isLoading) {
     return <div>...</div>; // veya bir yükleme spinner'ı
@@ -102,6 +116,7 @@ function AppRoutes() {
         />
         <Route path="homepage" element={<HomePage />} />
         <Route path="user/profile" element={<ProfilePage />} />
+        <Route path="databases" element={<DatabaseList />} />
         <Route path="user/gridPage" element={<GridPage />} />
         <Route path="user/components" element={<ComponentsPage />} />
       </Route>

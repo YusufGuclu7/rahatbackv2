@@ -62,16 +62,24 @@ const Login = () => {
   }, []);
 
   const handleLogin = (event) => {
+    console.log('Login button clicked');
     login(email, password)
       .then((resp) => {
-        cookies.set("jwt-access", resp.data.tokens.access.token);
+        console.log('Login response:', resp.data);
+        cookies.set("jwt-access", resp.data.tokens.access.token, { path: '/' });
+        cookies.set("jwt-access-expires", resp.data.tokens.access.expires, { path: '/' });
+        cookies.set("jwt-refresh", resp.data.tokens.refresh.token, { path: '/' });
+        cookies.set("jwt-refresh-expires", resp.data.tokens.refresh.expires, { path: '/' });
 
-        cookies.set("jwt-access-expires", resp.data.tokens.access.expires);
-        cookies.set("jwt-refresh", resp.data.tokens.refresh.token);
+        console.log('Cookies set:', {
+          access: cookies.get("jwt-access"),
+          refresh: cookies.get("jwt-refresh")
+        });
 
-        cookies.set("jwt-refresh-expires", resp.data.tokens.refresh.expires);
         const decodedToken = jwtDecode(resp.data.tokens.access.token);
         const role = decodedToken.role;
+        console.log('User role:', role);
+
         if (role === "user") {
           navigate("/homepage");
         } else if (role === "admin") {
@@ -80,8 +88,9 @@ const Login = () => {
         }
       })
       .catch((err) => {
+        console.error('Login error:', err);
         Swal.fire({
-          title: err.response.data.message,
+          title: err?.response?.data?.message || "Giriş başarısız",
           icon: "error",
           confirmButtonText: "Tamam",
         });

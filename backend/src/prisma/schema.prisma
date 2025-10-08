@@ -8,16 +8,17 @@ datasource db {
 }
 
 model User {
-  id              Int       @id @default(autoincrement())
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @default(now()) @updatedAt
+  id              Int        @id @default(autoincrement())
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @default(now()) @updatedAt
   deletedAt       DateTime?
-  status          Boolean   @default(true)
+  status          Boolean    @default(true)
   name            String
-  email           String    @unique
+  email           String     @unique
   password        String
-  role            Role      @default(user)
-  isEmailVerified Boolean   @default(false)
+  role            Role       @default(user)
+  isEmailVerified Boolean    @default(false)
+  Database        Database[]
   Token           Token[]
 }
 
@@ -27,10 +28,66 @@ model Token {
   updatedAt   DateTime  @default(now()) @updatedAt
   token       String
   type        TokenType
-  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade, onUpdate: Cascade)
   userId      Int
   expiresAt   DateTime
   blacklisted Boolean   @default(false)
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Database {
+  id               Int             @id @default(autoincrement())
+  userId           Int
+  name             String
+  type             DatabaseType
+  host             String
+  port             Int
+  username         String
+  password         String
+  database         String
+  connectionString String?
+  sslEnabled       Boolean         @default(false)
+  isActive         Boolean         @default(true)
+  lastTestedAt     DateTime?
+  createdAt        DateTime        @default(now())
+  updatedAt        DateTime        @updatedAt
+  BackupHistory    BackupHistory[]
+  BackupJob        BackupJob[]
+  user             User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model BackupJob {
+  id             Int             @id @default(autoincrement())
+  databaseId     Int
+  name           String
+  scheduleType   ScheduleType
+  cronExpression String?
+  isActive       Boolean         @default(true)
+  storageType    StorageType
+  storagePath    String
+  retentionDays  Int             @default(30)
+  compression    Boolean         @default(true)
+  lastRunAt      DateTime?
+  nextRunAt      DateTime?
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+  BackupHistory  BackupHistory[]
+  database       Database        @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+}
+
+model BackupHistory {
+  id           Int          @id @default(autoincrement())
+  backupJobId  Int?
+  databaseId   Int
+  status       BackupStatus
+  fileName     String
+  fileSize     BigInt?
+  filePath     String
+  duration     Int?
+  errorMessage String?
+  startedAt    DateTime     @default(now())
+  completedAt  DateTime?
+  backupJob    BackupJob?   @relation(fields: [backupJobId], references: [id])
+  database     Database     @relation(fields: [databaseId], references: [id], onDelete: Cascade)
 }
 
 enum Role {
@@ -43,4 +100,36 @@ enum TokenType {
   refresh
   resetPassword
   verifyEmail
+}
+
+enum DatabaseType {
+  postgresql
+  mysql
+  mongodb
+  mssql
+  mariadb
+  sqlite
+}
+
+enum ScheduleType {
+  manual
+  hourly
+  daily
+  weekly
+  monthly
+  custom
+}
+
+enum StorageType {
+  local
+  s3
+  ftp
+  azure
+}
+
+enum BackupStatus {
+  running
+  success
+  failed
+  cancelled
 }

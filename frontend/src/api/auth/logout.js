@@ -12,8 +12,10 @@ export const logout = () => {
   //     });
   // }
 
-  cookies.remove("jwt-access");
-  cookies.remove("jwt-access-expires");
-  cookies.remove("jwt-refresh");
-  cookies.remove("jwt-refresh-expires");
+  cookies.remove("jwt-access", { path: "/" });
+  cookies.remove("jwt-access-expires", { path: "/" });
+  cookies.remove("jwt-refresh", { path: "/" });
+  cookies.remove("jwt-refresh-expires", { path: "/" });
+
+  console.log("Logged out - cookies cleared");
 };
