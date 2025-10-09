@@ -277,6 +277,90 @@ const getBackupStats = async (userId) => {
   return await backupHistoryModel.getStats(userId);
 };
 
+/**
+ * Restore a backup
+ */
+const restoreBackup = async (historyId, userId) => {
+  // Get backup history with ownership verification
+  const backup = await getBackupHistoryById(historyId, userId);
+
+  if (backup.status !== 'success') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Only successful backups can be restored');
+  }
+
+  // Check if file exists
+  try {
+    await fs.access(backup.filePath);
+  } catch {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Backup file not found');
+  }
+
+  // Get database config with decrypted password
+  const dbConfig = await databaseService.getDatabaseConfig(backup.databaseId);
+
+  // Handle compressed files
+  let filePathToRestore = backup.filePath;
+  let needsCleanup = false;
+
+  if (backup.fileName.endsWith('.gz')) {
+    // Decompress the file
+    const decompressedPath = backup.filePath.replace('.gz', '');
+    const inputStream = fsSync.createReadStream(backup.filePath);
+    const outputStream = fsSync.createWriteStream(decompressedPath);
+    const gunzip = zlib.createGunzip();
+
+    await new Promise((resolve, reject) => {
+      outputStream.on('finish', () => resolve());
+      outputStream.on('error', reject);
+      inputStream.on('error', reject);
+      gunzip.on('error', reject);
+      inputStream.pipe(gunzip).pipe(outputStream);
+    });
+
+    filePathToRestore = decompressedPath;
+    needsCleanup = true;
+  }
+
+  try {
+    // Get appropriate connector
+    const connector = getConnector(dbConfig.type);
+
+    // Check if connector supports restore
+    if (!connector.restoreBackup) {
+      throw new ApiError(httpStatus.BAD_REQUEST, `Restore not supported for ${dbConfig.type}`);
+    }
+
+    // Execute restore
+    logger.info(`Starting restore for backup ${historyId} to database ${dbConfig.name}`);
+    const result = await connector.restoreBackup(dbConfig, filePathToRestore);
+
+    if (!result.success) {
+      throw new Error(result.error);
+    }
+
+    logger.info(`Restore completed successfully for backup ${historyId}`);
+
+    return {
+      success: true,
+      message: result.message,
+      duration: result.duration,
+      databaseName: dbConfig.name,
+    };
+  } catch (error) {
+    logger.error(`Restore failed for backup ${historyId}: ${error.message}`);
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, `Restore failed: ${error.message}`);
+  } finally {
+    // Clean up decompressed file if created
+    if (needsCleanup) {
+      try {
+        await fs.unlink(filePathToRestore);
+      } catch (error) {
+        logger.error(`Failed to cleanup decompressed file: ${error.message}`);
+      }
+    }
+  }
+};
+
 module.exports = {
   createBackupJob,
   getBackupJobById,
@@ -289,4 +373,5 @@ module.exports = {
   getBackupFilePath,
   deleteBackup,
   getBackupStats,
+  restoreBackup,
 };

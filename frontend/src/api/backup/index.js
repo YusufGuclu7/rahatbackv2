@@ -54,6 +54,11 @@ export const deleteBackup = async (id) => {
   return response.data;
 };
 
+export const restoreBackup = async (id) => {
+  const response = await axiosInstance.post(`/v1/backups/history/${id}/restore`);
+  return response.data;
+};
+
 export const getBackupStats = async () => {
   const response = await axiosInstance.get('/v1/backups/stats');
   return response.data;

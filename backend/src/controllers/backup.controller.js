@@ -84,6 +84,11 @@ const getBackupStats = catchAsync(async (req, res) => {
   res.send(stats);
 });
 
+const restoreBackup = catchAsync(async (req, res) => {
+  const result = await backupService.restoreBackup(parseInt(req.params.historyId), req.user.id);
+  res.send(result);
+});
+
 module.exports = {
   createBackupJob,
   getBackupJobs,
@@ -96,4 +101,5 @@ module.exports = {
   downloadBackup,
   deleteBackup,
   getBackupStats,
+  restoreBackup,
 };

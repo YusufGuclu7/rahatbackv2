@@ -28,6 +28,8 @@ router
 
 router.get('/history/:historyId/download', auth(), backupController.downloadBackup);
 
+router.post('/history/:historyId/restore', auth(), backupController.restoreBackup);
+
 // Stats
 router.get('/stats', auth(), backupController.getBackupStats);
 

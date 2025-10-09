@@ -77,6 +77,58 @@ const BackupHistoryList = () => {
     }
   };
 
+  const handleRestore = async (historyId, fileName, databaseName) => {
+    const result = await Swal.fire({
+      title: 'Veritabanını Geri Yükle',
+      html: `
+        <p><strong>"${fileName}"</strong> dosyası <strong>"${databaseName}"</strong> veritabanına geri yüklenecek.</p>
+        <p style="color: #d33; font-weight: bold; margin-top: 15px;">
+          ⚠️ UYARI: Mevcut veritabanı verisi silinecek ve yedeğiyle değiştirilecektir!
+        </p>
+        <p style="margin-top: 10px;">Bu işlem geri alınamaz. Devam etmek istediğinizden emin misiniz?</p>
+      `,
+      icon: 'warning',
+      showCancelButton: true,
+      confirmButtonColor: '#d33',
+      cancelButtonColor: '#3085d6',
+      confirmButtonText: 'Evet, Geri Yükle',
+      cancelButtonText: 'İptal',
+    });
+
+    if (result.isConfirmed) {
+      try {
+        Swal.fire({
+          title: 'Geri Yükleniyor...',
+          html: 'Lütfen bekleyin, bu işlem birkaç dakika sürebilir.',
+          allowOutsideClick: false,
+          didOpen: () => {
+            Swal.showLoading();
+          },
+        });
+
+        const response = await backupApi.restoreBackup(historyId);
+
+        Swal.fire({
+          title: 'Başarılı!',
+          html: `
+            <p>Veritabanı başarıyla geri yüklendi.</p>
+            <p><strong>Veritabanı:</strong> ${response.databaseName}</p>
+            <p><strong>Süre:</strong> ${formatDuration(response.duration)}</p>
+          `,
+          icon: 'success',
+        });
+
+        loadBackupHistory();
+      } catch (error) {
+        Swal.fire({
+          title: 'Hata',
+          text: error.response?.data?.message || 'Geri yükleme işlemi başarısız',
+          icon: 'error',
+        });
+      }
+    }
+  };
+
   const handleDelete = async (historyId, fileName) => {
     const result = await Swal.fire({
       title: 'Emin misiniz?',
@@ -215,11 +267,23 @@ const BackupHistoryList = () => {
       },
       {
         headerName: 'İşlemler',
-        width: 150,
+        width: 200,
         cellRenderer: (params) => {
           const isSuccess = params.data.status === 'success';
           return (
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', height: '100%' }}>
+              <Button
+                size="small"
+                variant="outlined"
+                color="success"
+                onClick={() =>
+                  handleRestore(params.data.id, params.data.fileName, params.data.database?.name)
+                }
+                title="Geri Yükle"
+                disabled={!isSuccess}
+              >
+                <RotateCcw size={16} />
+              </Button>
               <Button
                 size="small"
                 variant="outlined"
