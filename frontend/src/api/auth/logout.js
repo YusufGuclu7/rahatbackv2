@@ -18,4 +18,5 @@ export const logout = () => {
   cookies.remove("jwt-refresh-expires", { path: "/" });
 
   console.log("Logged out - cookies cleared");
+  window.location.href = "/login";
 };

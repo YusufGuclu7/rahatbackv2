@@ -1,6 +1,7 @@
 // axiosInstance.js
 import axios from "axios";
 import CheckToken from "../utils/checkToken/CheckToken";
+import { logout } from "./auth/logout";
 
 const axiosInstance = axios.create({
   baseURL: process.env.REACT_APP_API_URL, // kendi API URL'in
@@ -10,14 +11,18 @@ const axiosInstance = axios.create({
 // İstek interceptor'u
 axiosInstance.interceptors.request.use(
   async (config) => {
-    const token = await CheckToken();
-    if (!token) {
-      window.location.href = "/login";
-      return Promise.reject(new Error("Lütfen Giriş Yapınız."));
-    }
+    console.log("Request config:", config.url);
+    if (!config.url.includes('/auth/')) {
+      const token = await CheckToken();
+      if (!token) {
+        window.location.href = "/login";
+        return Promise.reject(new Error("Lütfen Giriş Yapınız."));
+      }
 
-    config.headers.Authorization = `Bearer ${token}`;
-    return config;
+      config.headers.Authorization = `Bearer ${token}`;
+      return config;
+    }
+    logout();
   },
   (error) => {
     return Promise.reject(error);
