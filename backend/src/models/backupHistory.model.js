@@ -4,8 +4,11 @@ const prisma = new PrismaClient();
 
 const backupHistoryModel = {
   create: async (data) => {
+    // Remove id field if it exists to prevent unique constraint errors
+    const { id, ...createData } = data;
+
     return prisma.backupHistory.create({
-      data,
+      data: createData,
       include: {
         database: {
           select: {

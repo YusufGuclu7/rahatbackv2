@@ -12,6 +12,9 @@ const logger = require('../config/logger');
 // Backup storage directory
 const BACKUP_STORAGE_PATH = process.env.BACKUP_STORAGE_PATH || path.join(__dirname, '../../backups');
 
+// Track running backups to prevent concurrent execution
+const runningBackups = new Set();
+
 /**
  * Ensure backup storage directory exists
  */
@@ -82,22 +85,33 @@ const deleteBackupJob = async (id, userId) => {
  * Execute a backup
  */
 const executeBackup = async (backupJobId) => {
+  // Prevent concurrent execution of the same backup job
+  if (runningBackups.has(backupJobId)) {
+    logger.warn(`Backup job ${backupJobId} is already running, skipping...`);
+    throw new ApiError(httpStatus.CONFLICT, 'Backup is already running for this job');
+  }
+
   const backupJob = await backupJobModel.findById(backupJobId);
   if (!backupJob) {
     throw new ApiError(httpStatus.NOT_FOUND, 'Backup job not found');
   }
 
+  // Mark as running
+  runningBackups.add(backupJobId);
+
   // Get database config with decrypted password
   const dbConfig = await databaseService.getDatabaseConfig(backupJob.databaseId);
 
   // Create backup history entry
-  const backupHistory = await backupHistoryModel.create({
-    backupJobId,
-    databaseId: backupJob.databaseId,
+  const historyData = {
+    backupJobId: parseInt(backupJobId),
+    databaseId: parseInt(backupJob.databaseId),
     status: 'running',
     fileName: '',
     filePath: '',
-  });
+  };
+  logger.info(`Creating backup history for job ${backupJobId}`, historyData);
+  const backupHistory = await backupHistoryModel.create(historyData);
 
   try {
     // Ensure backup directory exists
@@ -144,8 +158,16 @@ const executeBackup = async (backupJobId) => {
       completedAt: new Date(),
     });
 
-    // Update backup job last run time
-    await backupJobModel.updateLastRun(backupJobId);
+    // Calculate next run time based on schedule
+    let nextRunAt = null;
+    if (backupJob.scheduleType !== 'manual') {
+      const scheduleService = require('./schedule.service');
+      const cronExpression = scheduleService.getCronExpression(backupJob.scheduleType, backupJob.cronExpression);
+      nextRunAt = scheduleService.getNextRunTime(cronExpression);
+    }
+
+    // Update backup job last run time and next run time
+    await backupJobModel.updateLastRun(backupJobId, nextRunAt);
 
     // Clean up old backups based on retention policy
     await cleanupOldBackups(backupJobId, backupJob.retentionDays);
@@ -165,6 +187,9 @@ const executeBackup = async (backupJobId) => {
     await backupHistoryModel.updateStatus(backupHistory.id, 'failed', error.message);
 
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, `Backup failed: ${error.message}`);
+  } finally {
+    // Remove from running backups
+    runningBackups.delete(backupJobId);
   }
 };
 

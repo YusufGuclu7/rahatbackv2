@@ -33,4 +33,7 @@ router.post('/history/:historyId/restore', auth(), backupController.restoreBacku
 // Stats
 router.get('/stats', auth(), backupController.getBackupStats);
 
+// Scheduled Jobs Status
+router.get('/jobs/status/scheduled', auth(), backupController.getScheduledJobsStatus);
+
 module.exports = router;

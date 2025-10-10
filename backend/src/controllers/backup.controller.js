@@ -89,6 +89,11 @@ const restoreBackup = catchAsync(async (req, res) => {
   res.send(result);
 });
 
+const getScheduledJobsStatus = catchAsync(async (req, res) => {
+  const status = scheduleService.getScheduledJobsStatus();
+  res.send(status);
+});
+
 module.exports = {
   createBackupJob,
   getBackupJobs,
@@ -102,4 +107,5 @@ module.exports = {
   deleteBackup,
   getBackupStats,
   restoreBackup,
+  getScheduledJobsStatus,
 };
