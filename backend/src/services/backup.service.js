@@ -8,12 +8,125 @@ const { getConnector } = require('../utils/dbConnectors');
 const databaseService = require('./database.service');
 const ApiError = require('../utils/ApiError');
 const logger = require('../config/logger');
+const { sendBackupNotification } = require('./email.service');
+const prisma = require('../utils/database');
 
 // Backup storage directory
 const BACKUP_STORAGE_PATH = process.env.BACKUP_STORAGE_PATH || path.join(__dirname, '../../backups');
 
 // Track running backups to prevent concurrent execution
 const runningBackups = new Set();
+
+/**
+ * Send email notification for backup status
+ */
+const sendBackupEmailNotification = async (userId, backupJob, dbConfig, status, details = {}) => {
+  try {
+    const notificationSettings = await prisma.notificationSettings.findUnique({
+      where: { userId },
+    });
+
+    if (!notificationSettings || !notificationSettings.isActive || !notificationSettings.emailEnabled) {
+      return;
+    }
+
+    // Check if user wants this type of notification
+    if (status === 'success' && !notificationSettings.notifyOnSuccess) {
+      return;
+    }
+    if (status === 'failed' && !notificationSettings.notifyOnFailure) {
+      return;
+    }
+
+    const isSuccess = status === 'success';
+    const subject = isSuccess
+      ? `✅ Backup Başarılı - ${dbConfig.name}`
+      : `❌ Backup Hatalı - ${dbConfig.name}`;
+
+    const formatBytes = (bytes) => {
+      if (!bytes) return '0 Bytes';
+      const k = 1024;
+      const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+      const i = Math.floor(Math.log(bytes) / Math.log(k));
+      return `${(bytes / Math.pow(k, i)).toFixed(2)} ${sizes[i]}`;
+    };
+
+    const formatDuration = (ms) => {
+      if (!ms) return '0s';
+      const seconds = Math.floor(ms / 1000);
+      const minutes = Math.floor(seconds / 60);
+      if (minutes > 0) {
+        return `${minutes}m ${seconds % 60}s`;
+      }
+      return `${seconds}s`;
+    };
+
+    const text = isSuccess
+      ? `Veritabanı: ${dbConfig.name}\nJob: ${backupJob.name}\nDurum: Başarılı\nDosya: ${details.fileName}\nBoyut: ${formatBytes(details.fileSize)}\nSüre: ${formatDuration(details.duration)}`
+      : `Veritabanı: ${dbConfig.name}\nJob: ${backupJob.name}\nDurum: Hatalı\nHata: ${details.error}`;
+
+    const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: ${isSuccess ? '#4CAF50' : '#f44336'}; color: white; padding: 20px; text-align: center;">
+        <h1 style="margin: 0;">${isSuccess ? '✅ Backup Başarılı' : '❌ Backup Hatalı'}</h1>
+      </div>
+      <div style="padding: 20px; border: 1px solid #ddd;">
+        <h2 style="color: #333;">Backup Detayları</h2>
+        <table style="width: 100%; border-collapse: collapse;">
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Veritabanı:</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${dbConfig.name} (${dbConfig.type})</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Job Adı:</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${backupJob.name}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Durum:</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; color: ${isSuccess ? '#4CAF50' : '#f44336'}; font-weight: bold;">${isSuccess ? 'Başarılı' : 'Hatalı'}</td>
+          </tr>
+          ${
+            isSuccess
+              ? `
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Dosya Adı:</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${details.fileName}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Dosya Boyutu:</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${formatBytes(details.fileSize)}</td>
+          </tr>
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Süre:</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;">${formatDuration(details.duration)}</td>
+          </tr>
+          `
+              : `
+          <tr>
+            <td style="padding: 8px; border-bottom: 1px solid #eee;"><strong>Hata Mesajı:</strong></td>
+            <td style="padding: 8px; border-bottom: 1px solid #eee; color: #f44336;">${details.error}</td>
+          </tr>
+          `
+          }
+          <tr>
+            <td style="padding: 8px;"><strong>Tarih:</strong></td>
+            <td style="padding: 8px;">${new Date().toLocaleString('tr-TR')}</td>
+          </tr>
+        </table>
+      </div>
+      <div style="background: #f5f5f5; padding: 15px; text-align: center; font-size: 12px; color: #666;">
+        <p>Bu email otomatik olarak Backup System tarafından gönderilmiştir.</p>
+      </div>
+    </div>
+    `;
+
+    await sendBackupNotification(userId, subject, text, html);
+    logger.info(`Email notification sent to user ${userId} for backup job ${backupJob.id}`);
+  } catch (error) {
+    logger.error(`Failed to send email notification: ${error.message}`);
+    // Don't throw error, just log it - email failure shouldn't stop backup process
+  }
+};
 
 /**
  * Ensure backup storage directory exists
@@ -174,6 +287,13 @@ const executeBackup = async (backupJobId) => {
 
     logger.info(`Backup completed successfully for job ${backupJobId}`);
 
+    // Send success notification
+    await sendBackupEmailNotification(dbConfig.userId, backupJob, dbConfig, 'success', {
+      fileName: finalFileName,
+      fileSize,
+      duration: result.duration,
+    });
+
     return {
       success: true,
       backupHistoryId: backupHistory.id,
@@ -185,6 +305,11 @@ const executeBackup = async (backupJobId) => {
 
     // Update backup history with failure
     await backupHistoryModel.updateStatus(backupHistory.id, 'failed', error.message);
+
+    // Send failure notification
+    await sendBackupEmailNotification(dbConfig.userId, backupJob, dbConfig, 'failed', {
+      error: error.message,
+    });
 
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, `Backup failed: ${error.message}`);
   } finally {
