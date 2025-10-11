@@ -24,12 +24,12 @@ const getBackupJobs = catchAsync(async (req, res) => {
 });
 
 const getBackupJob = catchAsync(async (req, res) => {
-  const backupJob = await backupService.getBackupJobById(req.params.jobId, req.user.id);
+  const backupJob = await backupService.getBackupJobById(parseInt(req.params.jobId), req.user.id);
   res.send(backupJob);
 });
 
 const updateBackupJob = catchAsync(async (req, res) => {
-  const backupJob = await backupService.updateBackupJob(req.params.jobId, req.user.id, req.body);
+  const backupJob = await backupService.updateBackupJob(parseInt(req.params.jobId), req.user.id, req.body);
 
   // Restart scheduled job with new settings
   await scheduleService.restartScheduledJob(backupJob.id);
@@ -38,7 +38,7 @@ const updateBackupJob = catchAsync(async (req, res) => {
 });
 
 const deleteBackupJob = catchAsync(async (req, res) => {
-  await backupService.deleteBackupJob(req.params.jobId, req.user.id);
+  await backupService.deleteBackupJob(parseInt(req.params.jobId), req.user.id);
 
   // Stop scheduled job
   scheduleService.stopScheduledJob(parseInt(req.params.jobId));

@@ -27,7 +27,9 @@ const getCronExpression = (scheduleType, customCron = null) => {
  */
 const getNextRunTime = (cronExpression) => {
   try {
-    const interval = cronParser.parseExpression(cronExpression);
+    const interval = cronParser.parseExpression(cronExpression, {
+      tz: 'Europe/Istanbul'
+    });
     const nextDate = interval.next().toDate();
     return nextDate;
   } catch (error) {
@@ -64,6 +66,9 @@ const startScheduledJob = async (backupJob) => {
     } catch (error) {
       logger.error(`Scheduled backup failed for job ${backupJob.id}: ${error.message}`);
     }
+  }, {
+    scheduled: true,
+    timezone: "Europe/Istanbul"
   });
 
   activeCronJobs.set(backupJob.id, task);
