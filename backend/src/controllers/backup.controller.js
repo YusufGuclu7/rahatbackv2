@@ -70,8 +70,26 @@ const getBackupHistoryById = catchAsync(async (req, res) => {
 });
 
 const downloadBackup = catchAsync(async (req, res) => {
-  const { filePath, fileName } = await backupService.getBackupFilePath(parseInt(req.params.historyId), req.user.id);
-  res.download(filePath, fileName);
+  const { filePath, fileName, isTemp } = await backupService.getBackupFilePath(parseInt(req.params.historyId), req.user.id);
+
+  // Send file to client
+  res.download(filePath, fileName, async (err) => {
+    // Clean up temp file after download (success or failure)
+    if (isTemp) {
+      try {
+        const fs = require('fs').promises;
+        await fs.unlink(filePath);
+      } catch (cleanupError) {
+        // Log but don't throw - file already sent to client
+        console.error(`Failed to cleanup temp file: ${cleanupError.message}`);
+      }
+    }
+
+    // If download failed, pass error to error handler
+    if (err && !res.headersSent) {
+      throw err;
+    }
+  });
 });
 
 const deleteBackup = catchAsync(async (req, res) => {

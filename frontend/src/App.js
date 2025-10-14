@@ -16,6 +16,7 @@ import AdminPage from "./pages/adminPage/adminPage.js";
 import AdminUsers from "./pages/adminPage/adminUsers.js";
 import AdminSettings from "./pages/adminPage/adminProfilePage.js";
 import DatabaseList from "./pages/databases/DatabaseList.js";
+import CloudStorageList from "./pages/cloudStorage/CloudStorageList.js";
 import BackupJobsList from "./pages/backupJobs/BackupJobsList.js";
 import BackupHistoryList from "./pages/backupHistory/BackupHistoryList.js";
 import Dashboard from "./pages/dashboard/Dashboard.js";
@@ -122,6 +123,7 @@ function AppRoutes() {
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="user/profile" element={<ProfilePage />} />
         <Route path="databases" element={<DatabaseList />} />
+        <Route path="cloud-storage" element={<CloudStorageList />} />
         <Route path="backup-jobs" element={<BackupJobsList />} />
         <Route path="backup-history" element={<BackupHistoryList />} />
         <Route path="notifications" element={<EmailNotificationSettings />} />

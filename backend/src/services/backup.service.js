@@ -3,8 +3,9 @@ const path = require('path');
 const fs = require('fs').promises;
 const fsSync = require('fs');
 const zlib = require('zlib');
-const { backupJobModel, backupHistoryModel, databaseModel } = require('../models');
+const { backupJobModel, backupHistoryModel, databaseModel, cloudStorageModel } = require('../models');
 const { getConnector } = require('../utils/dbConnectors');
+const { getCloudStorageConnector } = require('../utils/cloudStorage');
 const databaseService = require('./database.service');
 const ApiError = require('../utils/ApiError');
 const logger = require('../config/logger');
@@ -261,6 +262,40 @@ const executeBackup = async (backupJobId) => {
       fileSize = stats.size;
     }
 
+    // Upload to cloud storage if configured
+    let cloudUploadResult = null;
+    if (backupJob.cloudStorageId && (backupJob.storageType === 's3' || backupJob.storageType === 'google_drive')) {
+      try {
+        logger.info(`Uploading backup to cloud storage for job ${backupJobId}`);
+        const cloudStorage = await cloudStorageModel.findById(backupJob.cloudStorageId);
+
+        if (cloudStorage && cloudStorage.isActive) {
+          const cloudConnector = getCloudStorageConnector(cloudStorage.storageType);
+          cloudUploadResult = await cloudConnector.uploadBackup(cloudStorage, finalFilePath, finalFileName);
+
+          if (cloudUploadResult.success) {
+            logger.info(`Successfully uploaded backup to ${cloudStorage.storageType}: ${cloudUploadResult.s3Key || cloudUploadResult.fileId}`);
+
+            // Update file path to cloud location
+            if (cloudStorage.storageType === 's3') {
+              finalFilePath = cloudUploadResult.url || cloudUploadResult.s3Key;
+            } else if (cloudStorage.storageType === 'google_drive') {
+              finalFilePath = cloudUploadResult.fileId;
+            }
+
+            // Optionally: Delete local file after cloud upload to save space
+            // Uncomment if you want to keep only cloud copies
+            // await fs.unlink(result.filePath);
+          } else {
+            logger.warn(`Cloud upload failed: ${cloudUploadResult.error}`);
+          }
+        }
+      } catch (error) {
+        logger.error(`Cloud upload error: ${error.message}`);
+        // Don't fail the backup if cloud upload fails
+      }
+    }
+
     // Update backup history with success
     await backupHistoryModel.update(backupHistory.id, {
       status: 'success',
@@ -391,11 +426,46 @@ const getBackupFilePath = async (id, userId) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Backup is not available for download');
   }
 
+  // Check if backup is from cloud storage
+  const backupJob = await backupJobModel.findById(backup.backupJobId);
+
+  // If cloud storage (Google Drive or S3), download first
+  if (backupJob.cloudStorageId && (backupJob.storageType === 'google_drive' || backupJob.storageType === 's3')) {
+    const cloudStorage = await cloudStorageModel.findById(backupJob.cloudStorageId);
+
+    if (cloudStorage && cloudStorage.isActive) {
+      // Create temporary download path
+      const tempDownloadPath = path.join(BACKUP_STORAGE_PATH, 'temp', backup.fileName);
+      await fs.mkdir(path.dirname(tempDownloadPath), { recursive: true });
+
+      const cloudConnector = getCloudStorageConnector(cloudStorage.storageType);
+
+      // Download from cloud storage
+      const downloadResult = await cloudConnector.downloadBackup(
+        cloudStorage,
+        backup.filePath, // This is the cloud fileId or S3 key
+        tempDownloadPath
+      );
+
+      if (!downloadResult.success) {
+        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, `Failed to download from cloud: ${downloadResult.error}`);
+      }
+
+      return {
+        filePath: tempDownloadPath,
+        fileName: backup.fileName,
+        isTemp: true, // Flag to clean up after download
+      };
+    }
+  }
+
+  // Local file - check if exists
   try {
     await fs.access(backup.filePath);
     return {
       filePath: backup.filePath,
       fileName: backup.fileName,
+      isTemp: false,
     };
   } catch {
     throw new ApiError(httpStatus.NOT_FOUND, 'Backup file not found');

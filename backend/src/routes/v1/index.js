@@ -4,6 +4,7 @@ const userRoute = require('./user.route');
 const databaseRoute = require('./database.route');
 const backupRoute = require('./backup.route');
 const notificationRoute = require('./notification.route');
+const cloudStorageRoute = require('./cloudStorage.route');
 const docsRoute = require('./docs.route');
 const config = require('../../config/config');
 
@@ -29,6 +30,10 @@ const defaultRoutes = [
   {
     path: '/notifications',
     route: notificationRoute,
+  },
+  {
+    path: '/cloud-storage',
+    route: cloudStorageRoute,
   },
 ];
 

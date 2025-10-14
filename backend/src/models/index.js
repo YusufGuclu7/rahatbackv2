@@ -3,3 +3,4 @@ module.exports.userModel = require('./user.model');
 module.exports.databaseModel = require('./database.model');
 module.exports.backupJobModel = require('./backupJob.model');
 module.exports.backupHistoryModel = require('./backupHistory.model');
+module.exports.cloudStorageModel = require('./cloudStorage.model');

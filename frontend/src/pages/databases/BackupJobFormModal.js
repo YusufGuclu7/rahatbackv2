@@ -20,6 +20,7 @@ import {
 import { Save, X } from 'lucide-react';
 import Swal from 'sweetalert2';
 import * as backupApi from '../../api/backup';
+import * as cloudStorageApi from '../../api/cloudStorage';
 
 const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
   const [formData, setFormData] = useState({
@@ -28,6 +29,7 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
     cronExpression: '',
     storageType: 'local',
     storagePath: '/backups',
+    cloudStorageId: null,
     retentionDays: 30,
     compression: true,
     isActive: true,
@@ -35,6 +37,7 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
 
   const [loading, setLoading] = useState(false);
   const [showCronInput, setShowCronInput] = useState(false);
+  const [cloudStorages, setCloudStorages] = useState([]);
 
   useEffect(() => {
     if (open && database) {
@@ -45,16 +48,30 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
         cronExpression: '',
         storageType: 'local',
         storagePath: `/backups/${database.name.toLowerCase().replace(/\s/g, '_')}`,
+        cloudStorageId: null,
         retentionDays: 30,
         compression: true,
         isActive: true,
       });
+
+      // Cloud storage listesini yükle
+      loadCloudStorages();
     }
   }, [open, database]);
 
   useEffect(() => {
     setShowCronInput(formData.scheduleType === 'custom');
   }, [formData.scheduleType]);
+
+  const loadCloudStorages = async () => {
+    try {
+      const data = await cloudStorageApi.getCloudStorages({ isActive: true });
+      console.log('Loaded cloud storages:', data); // DEBUG
+      setCloudStorages(data);
+    } catch (error) {
+      console.error('Cloud storage listesi yüklenemedi:', error);
+    }
+  };
 
   const handleChange = (field, value) => {
     setFormData((prev) => ({
@@ -70,8 +87,13 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
       return;
     }
 
-    if (!formData.storagePath.trim()) {
+    if (formData.storageType === 'local' && !formData.storagePath.trim()) {
       Swal.fire('Hata', 'Depolama yolu gerekli', 'error');
+      return;
+    }
+
+    if (['s3', 'google_drive', 'ftp', 'azure'].includes(formData.storageType) && !formData.cloudStorageId) {
+      Swal.fire('Hata', 'Cloud storage konfigürasyonu seçmelisiniz', 'error');
       return;
     }
 
@@ -189,20 +211,53 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
             >
               <MenuItem value="local">Yerel (Sunucu)</MenuItem>
               <MenuItem value="s3">AWS S3</MenuItem>
+              <MenuItem value="google_drive">Google Drive</MenuItem>
               <MenuItem value="ftp">FTP</MenuItem>
               <MenuItem value="azure">Azure Blob</MenuItem>
             </Select>
           </FormControl>
 
-          <TextField
-            label="Depolama Yolu"
-            fullWidth
-            value={formData.storagePath}
-            onChange={(e) => handleChange('storagePath', e.target.value)}
-            placeholder="/backups/database_name"
-            helperText="Yedek dosyalarının kaydedileceği yol"
-            required
-          />
+          {/* Cloud Storage Config Dropdown (S3, Google Drive, FTP, Azure için) */}
+          {['s3', 'google_drive', 'ftp', 'azure'].includes(formData.storageType) && (
+            <FormControl fullWidth>
+              <InputLabel>Cloud Storage Konfigürasyonu</InputLabel>
+              <Select
+                value={formData.cloudStorageId || ''}
+                onChange={(e) => handleChange('cloudStorageId', e.target.value)}
+                label="Cloud Storage Konfigürasyonu"
+                required
+              >
+                {cloudStorages
+                  .filter((cs) => cs.storageType === formData.storageType)
+                  .map((cs) => (
+                    <MenuItem key={cs.id} value={cs.id}>
+                      {cs.name} {cs.isDefault && '(Varsayılan)'}
+                    </MenuItem>
+                  ))}
+                {cloudStorages.filter((cs) => cs.storageType === formData.storageType).length === 0 && (
+                  <MenuItem disabled>Bu depolama tipi için konfigürasyon bulunamadı</MenuItem>
+                )}
+              </Select>
+              {cloudStorages.filter((cs) => cs.storageType === formData.storageType).length === 0 && (
+                <Alert severity="warning" sx={{ mt: 1 }}>
+                  Önce Cloud Storage sayfasından bir {formData.storageType === 'google_drive' ? 'Google Drive' : formData.storageType.toUpperCase()} konfigürasyonu oluşturmalısınız.
+                </Alert>
+              )}
+            </FormControl>
+          )}
+
+          {/* Depolama Yolu (sadece local için) */}
+          {formData.storageType === 'local' && (
+            <TextField
+              label="Depolama Yolu"
+              fullWidth
+              value={formData.storagePath}
+              onChange={(e) => handleChange('storagePath', e.target.value)}
+              placeholder="/backups/database_name"
+              helperText="Yedek dosyalarının kaydedileceği yol"
+              required
+            />
+          )}
 
           <TextField
             label="Saklama Süresi (Gün)"

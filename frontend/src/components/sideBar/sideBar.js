@@ -40,12 +40,14 @@ import {
   Database,
   Dashboard as DashboardIcon,
   Bell,
+  Cloud,
 } from "tabler-icons-react";
 
 const menuItems = [
   { text: "Anasayfa", icon: <Home size={22} />, path: "/homepage", badge: 7 },
   { text: "Dashboard", icon: <DashboardIcon size={22} />, path: "/dashboard" },
   { text: "Veritabanları", icon: <Database size={22} />, path: "/databases" },
+  { text: "Cloud Storage", icon: <Cloud size={22} />, path: "/cloud-storage" },
   { text: "Backup Jobs", icon: <Calendar size={22} />, path: "/backup-jobs" },
   { text: "Yedekleme Geçmişi", icon: <ListIcon size={22} />, path: "/backup-history" },
   { text: "Email Bildirimleri", icon: <Bell size={22} />, path: "/notifications" },
