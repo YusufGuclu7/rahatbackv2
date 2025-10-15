@@ -88,7 +88,11 @@ const createBackup = async (config, outputPath) => {
 
   try {
     const startTime = Date.now();
-    await execPromise(command, { env, maxBuffer: 1024 * 1024 * 100 }); // 100MB buffer
+    await execPromise(command, {
+      env,
+      maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
+      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large backups
+    });
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
     // Get file size
@@ -131,10 +135,18 @@ const restoreBackup = async (config, backupFilePath) => {
 
     // Drop all database objects (tables, sequences, etc.) by dropping schema
     // This is safer than dropping database - keeps connections alive
-    await execPromise(dropSchemaCommand, { env, maxBuffer: 1024 * 1024 * 100 });
+    await execPromise(dropSchemaCommand, {
+      env,
+      maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
+      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large restores
+    });
 
     // Restore from backup (recreates all tables, sequences with correct values, constraints, etc.)
-    await execPromise(restoreCommand, { env, maxBuffer: 1024 * 1024 * 100 });
+    await execPromise(restoreCommand, {
+      env,
+      maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
+      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large restores
+    });
 
     const duration = Math.floor((Date.now() - startTime) / 1000);
 

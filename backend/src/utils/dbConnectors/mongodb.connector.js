@@ -61,7 +61,10 @@ const createBackup = async (config, outputPath) => {
 
   try {
     const startTime = Date.now();
-    await execPromise(command, { maxBuffer: 1024 * 1024 * 100 });
+    await execPromise(command, {
+      maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
+      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large backups
+    });
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
     // Calculate folder size
@@ -95,7 +98,10 @@ const restoreBackup = async (config, backupFolderPath) => {
 
   try {
     const startTime = Date.now();
-    await execPromise(command, { maxBuffer: 1024 * 1024 * 100 });
+    await execPromise(command, {
+      maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
+      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large restores
+    });
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
     return {

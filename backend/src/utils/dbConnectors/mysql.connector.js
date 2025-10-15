@@ -49,7 +49,10 @@ const createBackup = async (config, outputPath) => {
 
   try {
     const startTime = Date.now();
-    await execPromise(command, { maxBuffer: 1024 * 1024 * 100 }); // 100MB buffer
+    await execPromise(command, {
+      maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
+      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large backups
+    });
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
     // Get file size
@@ -86,13 +89,19 @@ const restoreBackup = async (config, backupFilePath) => {
 
     // Drop all existing tables (preserves database structure, doesn't disconnect users)
     try {
-      await execPromise(dropTablesCommand, { maxBuffer: 1024 * 1024 * 100 });
+      await execPromise(dropTablesCommand, {
+        maxBuffer: 1024 * 1024 * 500,
+        timeout: 30 * 60 * 1000
+      });
     } catch (err) {
       // If no tables exist, this will fail - that's ok
     }
 
     // Restore from backup (recreates all tables with data, auto_increment values, etc.)
-    await execPromise(restoreCommand, { maxBuffer: 1024 * 1024 * 100 });
+    await execPromise(restoreCommand, {
+      maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
+      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large restores
+    });
 
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
