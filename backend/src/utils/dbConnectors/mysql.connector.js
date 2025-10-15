@@ -75,31 +75,23 @@ const createBackup = async (config, outputPath) => {
  * Restore MySQL database from backup
  */
 const restoreBackup = async (config, backupFilePath) => {
-  // Kill all connections to the database before dropping
-  const killConnectionsCommand = `mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} -e "SELECT CONCAT('KILL ', id, ';') FROM INFORMATION_SCHEMA.PROCESSLIST WHERE db = '${config.database}' AND id != CONNECTION_ID() INTO OUTFILE '/tmp/kill_connections.txt'; SOURCE /tmp/kill_connections.txt;" || true`;
+  // MySQL: Drop all tables to ensure clean restore
+  // We get list of tables and drop them one by one (safer than dropping database)
+  const dropTablesCommand = `mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} -N -e "SELECT CONCAT('DROP TABLE IF EXISTS \\\`', table_name, '\\\`;') FROM information_schema.tables WHERE table_schema = '${config.database}';" ${config.database} | mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} ${config.database}`;
 
-  // Simpler approach: Drop and recreate with FORCE (MySQL 8.0+)
-  const dropCommand = `mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} -e "DROP DATABASE IF EXISTS ${config.database};"`;
-  const createCommand = `mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} -e "CREATE DATABASE ${config.database};"`;
   const restoreCommand = `mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} ${config.database} < "${backupFilePath}"`;
 
   try {
     const startTime = Date.now();
 
-    // Try to kill connections (may fail on some MySQL versions, that's ok)
+    // Drop all existing tables (preserves database structure, doesn't disconnect users)
     try {
-      await execPromise(killConnectionsCommand, { maxBuffer: 1024 * 1024 * 100 });
+      await execPromise(dropTablesCommand, { maxBuffer: 1024 * 1024 * 100 });
     } catch (err) {
-      // Ignore errors from kill connections - continue with drop
+      // If no tables exist, this will fail - that's ok
     }
 
-    // Drop existing database
-    await execPromise(dropCommand, { maxBuffer: 1024 * 1024 * 100 });
-
-    // Create fresh database
-    await execPromise(createCommand, { maxBuffer: 1024 * 1024 * 100 });
-
-    // Restore from backup
+    // Restore from backup (recreates all tables with data, auto_increment values, etc.)
     await execPromise(restoreCommand, { maxBuffer: 1024 * 1024 * 100 });
 
     const duration = Math.floor((Date.now() - startTime) / 1000);

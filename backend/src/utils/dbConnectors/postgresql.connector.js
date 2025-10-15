@@ -119,27 +119,21 @@ const restoreBackup = async (config, backupFilePath) => {
     PGPASSWORD: config.password,
   };
 
-  // Terminate all active connections to the database before dropping
-  const terminateConnectionsCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${config.database}' AND pid <> pg_backend_pid();"`;
+  // Drop and recreate schema (cleanest method without disconnecting users)
+  // This removes all tables, sequences, functions, triggers, constraints, etc.
+  // Database stays alive, so active connections won't be terminated
+  const dropSchemaCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres; GRANT ALL ON SCHEMA public TO public;"`;
 
-  // Drop and recreate the database to ensure clean restore
-  const dropCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d postgres -c "DROP DATABASE IF EXISTS ${config.database};"`;
-  const createCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d postgres -c "CREATE DATABASE ${config.database};"`;
   const restoreCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -f "${backupFilePath}"`;
 
   try {
     const startTime = Date.now();
 
-    // Terminate all active connections first
-    await execPromise(terminateConnectionsCommand, { env, maxBuffer: 1024 * 1024 * 100 });
+    // Drop all database objects (tables, sequences, etc.) by dropping schema
+    // This is safer than dropping database - keeps connections alive
+    await execPromise(dropSchemaCommand, { env, maxBuffer: 1024 * 1024 * 100 });
 
-    // Drop existing database
-    await execPromise(dropCommand, { env, maxBuffer: 1024 * 1024 * 100 });
-
-    // Create fresh database
-    await execPromise(createCommand, { env, maxBuffer: 1024 * 1024 * 100 });
-
-    // Restore from backup
+    // Restore from backup (recreates all tables, sequences with correct values, constraints, etc.)
     await execPromise(restoreCommand, { env, maxBuffer: 1024 * 1024 * 100 });
 
     const duration = Math.floor((Date.now() - startTime) / 1000);
