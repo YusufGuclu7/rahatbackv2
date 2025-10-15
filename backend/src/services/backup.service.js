@@ -380,15 +380,40 @@ const cleanupOldBackups = async (backupJobId, retentionDays) => {
   cutoffDate.setDate(cutoffDate.getDate() - retentionDays);
 
   const oldBackups = await backupHistoryModel.findByJobId(backupJobId, 1000);
+  const backupJob = await backupJobModel.findById(backupJobId);
 
   for (const backup of oldBackups) {
     if (new Date(backup.startedAt) < cutoffDate && backup.status === 'success') {
       try {
-        // Delete file
-        await fs.unlink(backup.filePath);
-        // Delete history record
+        // Check if backup is from cloud storage
+        if (backupJob && backupJob.cloudStorageId && (backupJob.storageType === 'google_drive' || backupJob.storageType === 's3')) {
+          // Delete from cloud storage
+          try {
+            const cloudStorage = await cloudStorageModel.findById(backupJob.cloudStorageId);
+
+            if (cloudStorage && cloudStorage.isActive) {
+              const cloudConnector = getCloudStorageConnector(cloudStorage.storageType);
+              const deleteResult = await cloudConnector.deleteBackup(cloudStorage, backup.filePath);
+
+              if (deleteResult.success) {
+                logger.info(`Cleaned up old backup from ${cloudStorage.storageType}: ${backup.fileName}`);
+              } else {
+                logger.warn(`Failed to delete old backup from cloud: ${deleteResult.error}`);
+                continue; // Skip deleting history record if cloud delete failed
+              }
+            }
+          } catch (error) {
+            logger.error(`Error cleaning up backup from cloud storage: ${error.message}`);
+            continue; // Skip deleting history record if cloud delete failed
+          }
+        } else {
+          // Delete local file
+          await fs.unlink(backup.filePath);
+          logger.info(`Cleaned up old local backup: ${backup.fileName}`);
+        }
+
+        // Delete history record only after successful file deletion
         await backupHistoryModel.delete(backup.id);
-        logger.info(`Cleaned up old backup: ${backup.fileName}`);
       } catch (error) {
         logger.error(`Failed to cleanup backup ${backup.id}: ${error.message}`);
       }
@@ -478,11 +503,36 @@ const getBackupFilePath = async (id, userId) => {
 const deleteBackup = async (id, userId) => {
   const backup = await getBackupHistoryById(id, userId);
 
-  try {
-    // Delete file
-    await fs.unlink(backup.filePath);
-  } catch (error) {
-    logger.error(`Failed to delete backup file: ${error.message}`);
+  // Check if backup is from cloud storage
+  const backupJob = await backupJobModel.findById(backup.backupJobId);
+
+  if (backupJob && backupJob.cloudStorageId && (backupJob.storageType === 'google_drive' || backupJob.storageType === 's3')) {
+    // Delete from cloud storage
+    try {
+      const cloudStorage = await cloudStorageModel.findById(backupJob.cloudStorageId);
+
+      if (cloudStorage && cloudStorage.isActive) {
+        const cloudConnector = getCloudStorageConnector(cloudStorage.storageType);
+        const deleteResult = await cloudConnector.deleteBackup(cloudStorage, backup.filePath);
+
+        if (deleteResult.success) {
+          logger.info(`Successfully deleted backup from ${cloudStorage.storageType}: ${backup.filePath}`);
+        } else {
+          logger.warn(`Failed to delete backup from cloud storage: ${deleteResult.error}`);
+        }
+      }
+    } catch (error) {
+      logger.error(`Error deleting backup from cloud storage: ${error.message}`);
+      // Continue with deletion even if cloud delete fails
+    }
+  } else {
+    // Delete local file
+    try {
+      await fs.unlink(backup.filePath);
+      logger.info(`Successfully deleted local backup file: ${backup.filePath}`);
+    } catch (error) {
+      logger.error(`Failed to delete local backup file: ${error.message}`);
+    }
   }
 
   // Delete history record
