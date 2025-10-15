@@ -75,11 +75,33 @@ const createBackup = async (config, outputPath) => {
  * Restore MySQL database from backup
  */
 const restoreBackup = async (config, backupFilePath) => {
-  const command = `mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} ${config.database} < "${backupFilePath}"`;
+  // Kill all connections to the database before dropping
+  const killConnectionsCommand = `mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} -e "SELECT CONCAT('KILL ', id, ';') FROM INFORMATION_SCHEMA.PROCESSLIST WHERE db = '${config.database}' AND id != CONNECTION_ID() INTO OUTFILE '/tmp/kill_connections.txt'; SOURCE /tmp/kill_connections.txt;" || true`;
+
+  // Simpler approach: Drop and recreate with FORCE (MySQL 8.0+)
+  const dropCommand = `mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} -e "DROP DATABASE IF EXISTS ${config.database};"`;
+  const createCommand = `mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} -e "CREATE DATABASE ${config.database};"`;
+  const restoreCommand = `mysql -h ${config.host} -P ${config.port} -u ${config.username} -p${config.password} ${config.database} < "${backupFilePath}"`;
 
   try {
     const startTime = Date.now();
-    await execPromise(command, { maxBuffer: 1024 * 1024 * 100 });
+
+    // Try to kill connections (may fail on some MySQL versions, that's ok)
+    try {
+      await execPromise(killConnectionsCommand, { maxBuffer: 1024 * 1024 * 100 });
+    } catch (err) {
+      // Ignore errors from kill connections - continue with drop
+    }
+
+    // Drop existing database
+    await execPromise(dropCommand, { maxBuffer: 1024 * 1024 * 100 });
+
+    // Create fresh database
+    await execPromise(createCommand, { maxBuffer: 1024 * 1024 * 100 });
+
+    // Restore from backup
+    await execPromise(restoreCommand, { maxBuffer: 1024 * 1024 * 100 });
+
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
     return {

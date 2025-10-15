@@ -1,171 +1,327 @@
-./backend/.editorconfig
-./backend/.env
-./backend/.env.example
-./backend/.eslintignore
-./backend/.eslintrc.json
-./backend/.gitattributes
-./backend/.gitignore
-./backend/.husky/post-checkout
-./backend/.husky/post-commit
-./backend/.husky/pre-commit
-./backend/.lintstagedrc.json
-./backend/.prettierignore
-./backend/.prettierrc.json
-./backend/.prismalintrc.json
-./backend/backups/job_1/rahat_fatura_db_2025-10-08T11-37-45-308Z.sql
-./backend/backups/job_1/rahat_fatura_db_2025-10-08T11-37-45-308Z.sql.gz
-./backend/backups/job_1/rahat_fatura_db_2025-10-08T11-40-12-530Z.sql.gz
-./backend/backups/job_1/rahat_fatura_db_2025-10-08T11-40-28-359Z.sql.gz
-./backend/backups/job_2/rahat_fatura_db_2025-10-08T11-51-29-338Z.sql.gz
-./backend/bin/createNodejsApp.js
-./backend/ecosystem.config.json
-./backend/jest.config.js
-./backend/package-lock.json
-./backend/package.json
-./backend/README.md
-./backend/src/app.js
-./backend/src/config/config.js
-./backend/src/config/logger.js
-./backend/src/config/morgan.js
-./backend/src/config/passport.js
-./backend/src/config/roles.js
-./backend/src/config/tokens.js
-./backend/src/controllers/auth.controller.js
-./backend/src/controllers/backup.controller.js
-./backend/src/controllers/database.controller.js
-./backend/src/controllers/index.js
-./backend/src/controllers/user.controller.js
-./backend/src/docs/components.yml
-./backend/src/docs/swaggerDef.js
-./backend/src/index.js
-./backend/src/middlewares/auth.js
-./backend/src/middlewares/error.js
-./backend/src/middlewares/rateLimiter.js
-./backend/src/middlewares/validate.js
-./backend/src/models/backupHistory.model.js
-./backend/src/models/backupJob.model.js
-./backend/src/models/database.model.js
-./backend/src/models/index.js
-./backend/src/models/token.model.js
-./backend/src/models/user.model.js
-./backend/src/prisma/migrations/20251007142101_init/migration.sql
-./backend/src/prisma/migrations/20251008071905_add_backup_models/migration.sql
-./backend/src/prisma/migrations/20251008232716_add_token_unique_constraint/migration.sql
-./backend/src/prisma/migrations/migration_lock.toml
-./backend/src/prisma/schema.prisma
-./backend/src/routes/v1/auth.route.js
-./backend/src/routes/v1/backup.route.js
-./backend/src/routes/v1/database.route.js
-./backend/src/routes/v1/docs.route.js
-./backend/src/routes/v1/index.js
-./backend/src/routes/v1/user.route.js
-./backend/src/services/auth.service.js
-./backend/src/services/backup.service.js
-./backend/src/services/database.service.js
-./backend/src/services/email.service.js
-./backend/src/services/index.js
-./backend/src/services/schedule.service.js
-./backend/src/services/token.service.js
-./backend/src/services/user.service.js
-./backend/src/utils/ApiError.js
-./backend/src/utils/catchAsync.js
-./backend/src/utils/database.js
-./backend/src/utils/dbConnectors/index.js
-./backend/src/utils/dbConnectors/mongodb.connector.js
-./backend/src/utils/dbConnectors/mysql.connector.js
-./backend/src/utils/dbConnectors/postgresql.connector.js
-./backend/src/utils/pick.js
-./backend/src/validations/auth.validation.js
-./backend/src/validations/custom.validation.js
-./backend/src/validations/index.js
-./backend/src/validations/user.validation.js
-./frontend/.env
-./frontend/.env.example
-./frontend/.gitattributes
-./frontend/.gitignore
-./frontend/bin/create-rahat-react-template.js
-./frontend/package-lock.json
-./frontend/package.json
-./frontend/public/favicon.ico
-./frontend/public/images/login-pages.png
-./frontend/public/index.html
-./frontend/public/logo192.png
-./frontend/public/logo512.png
-./frontend/public/manifest.json
-./frontend/public/rahatsistem-logo.png
-./frontend/public/robots.txt
-./frontend/README.md
-./frontend/src/api/auth/forgotPassword.js
-./frontend/src/api/auth/login.js
-./frontend/src/api/auth/logout.js
-./frontend/src/api/auth/refreshToken.js
-./frontend/src/api/auth/resetPassword.js
-./frontend/src/api/axiosInstance.js
-./frontend/src/api/backup/index.js
-./frontend/src/api/database/index.js
-./frontend/src/api/gridList/getTaxPayerList/index.js
-./frontend/src/api/requestTemplates.js
-./frontend/src/App.css
-./frontend/src/App.js
-./frontend/src/App.test.js
-./frontend/src/assets/images/by-rahatsistem-logo.png
-./frontend/src/assets/images/images1.jpg
-./frontend/src/assets/images/images2.jpg
-./frontend/src/assets/images/images3.png
-./frontend/src/assets/images/rahatsistem-logo.png
-./frontend/src/components/adminSideBar/adminSideBar.js
-./frontend/src/components/AnimatedAlerts/index.js
-./frontend/src/components/Buttons/buttons.js
-./frontend/src/components/DateRangePicker/day.css
-./frontend/src/components/DateRangePicker/index.js
-./frontend/src/components/GridHeader/index.js
-./frontend/src/components/GridSideBar/gridSideBar.js
-./frontend/src/components/loadingSwal/index.js
-./frontend/src/components/navbar/appsMenu.js
-./frontend/src/components/navbar/navbar.js
-./frontend/src/components/navbar/profilMenu.js
-./frontend/src/components/sideBar/sideBar.js
-./frontend/src/index.css
-./frontend/src/index.js
-./frontend/src/layouts/AdminLayout.js
-./frontend/src/layouts/MainLayout.js
-./frontend/src/locale.tr.js
-./frontend/src/logo.svg
-./frontend/src/pages/adminPage/adminPage.js
-./frontend/src/pages/adminPage/adminProfileInfoPage.js
-./frontend/src/pages/adminPage/adminProfilePage.js
-./frontend/src/pages/adminPage/adminProfileSettingsPage.js
-./frontend/src/pages/adminPage/adminUsers.js
-./frontend/src/pages/adminPage/columnDefs.js
-./frontend/src/pages/backupHistory/BackupHistoryList.js
-./frontend/src/pages/backupJobs/BackupJobsList.js
-./frontend/src/pages/ComponentsPage/columnDefs.js
-./frontend/src/pages/ComponentsPage/detailsGrid.js
-./frontend/src/pages/ComponentsPage/formModal.js
-./frontend/src/pages/ComponentsPage/index.js
-./frontend/src/pages/databases/BackupJobFormModal.js
-./frontend/src/pages/databases/DatabaseFormModal.js
-./frontend/src/pages/databases/DatabaseList.js
-./frontend/src/pages/forgotPassword/forgotPassword.js
-./frontend/src/pages/gridPageTemplate/columnDefs.js
-./frontend/src/pages/gridPageTemplate/detailsGrid.js
-./frontend/src/pages/gridPageTemplate/formModal.js
-./frontend/src/pages/gridPageTemplate/index.js
-./frontend/src/pages/homePage/homePage.js
-./frontend/src/pages/index.js
-./frontend/src/pages/landingPage/index.js
-./frontend/src/pages/loginPage/loginPage.js
-./frontend/src/pages/profilePage/userProfile.js
-./frontend/src/pages/profilePage/userProfileInfoPage.js
-./frontend/src/pages/profilePage/userProfileSettingsPage.js
-./frontend/src/pages/registerPage/register.js
-./frontend/src/reportWebVitals.js
-./frontend/src/setupTests.js
-./frontend/src/theme.js
-./frontend/src/utils/checkToken/CheckToken.js
-./frontend/src/utils/cookie/index.js
-./frontend/src/utils/delay/index.js
-./frontend/src/utils/emailFormatControl/index.js
-./proje_yapisi.txt
-./README.md
-./yapi.txt
+RAHAT BACKUP SYSTEM - PROJE YAPISI
+=====================================
+
+ROOT
+├── README.md
+├── .gitignore
+├── .gitattributes
+└── .claude/
+    └── settings.local.json
+
+BACKEND (./backend)
+├── Configuration Files
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── .env
+│   ├── .env.example
+│   ├── .gitignore
+│   ├── .gitattributes
+│   ├── .editorconfig
+│   ├── .eslintrc.json
+│   ├── .eslintignore
+│   ├── .prettierrc.json
+│   ├── .prettierignore
+│   ├── .prismalintrc.json
+│   ├── .lintstagedrc.json
+│   ├── jest.config.js
+│   ├── ecosystem.config.json
+│   ├── README.md
+│   └── test-schedule.js
+│
+├── .husky/ (Git Hooks)
+│   ├── pre-commit
+│   ├── post-commit
+│   └── post-checkout
+│
+├── bin/
+│   └── createNodejsApp.js
+│
+├── backups/ (Database Backups - Excluded from listing)
+│   ├── job_1/
+│   ├── job_2/
+│   ├── job_3/
+│   ├── job_4/
+│   └── job_6/
+│
+└── src/
+    ├── index.js
+    ├── app.js
+    │
+    ├── config/
+    │   ├── config.js
+    │   ├── logger.js
+    │   ├── morgan.js
+    │   ├── passport.js
+    │   ├── roles.js
+    │   └── tokens.js
+    │
+    ├── controllers/
+    │   ├── index.js
+    │   ├── auth.controller.js
+    │   ├── backup.controller.js
+    │   ├── cloudStorage.controller.js
+    │   ├── database.controller.js
+    │   ├── notification.controller.js
+    │   └── user.controller.js
+    │
+    ├── docs/
+    │   ├── components.yml
+    │   └── swaggerDef.js
+    │
+    ├── middlewares/
+    │   ├── auth.js
+    │   ├── error.js
+    │   ├── rateLimiter.js
+    │   └── validate.js
+    │
+    ├── models/
+    │   ├── index.js
+    │   ├── backupHistory.model.js
+    │   ├── backupJob.model.js
+    │   ├── cloudStorage.model.js
+    │   ├── database.model.js
+    │   ├── token.model.js
+    │   └── user.model.js
+    │
+    ├── prisma/
+    │   ├── schema.prisma
+    │   └── migrations/
+    │       ├── 20251007142101_init/
+    │       │   └── migration.sql
+    │       ├── 20251008071905_add_backup_models/
+    │       │   └── migration.sql
+    │       ├── 20251008232716_add_token_unique_constraint/
+    │       │   └── migration.sql
+    │       └── migration_lock.toml
+    │
+    ├── routes/
+    │   └── v1/
+    │       ├── index.js
+    │       ├── auth.route.js
+    │       ├── backup.route.js
+    │       ├── cloudStorage.route.js
+    │       ├── database.route.js
+    │       ├── docs.route.js
+    │       ├── notification.route.js
+    │       └── user.route.js
+    │
+    ├── services/
+    │   ├── index.js
+    │   ├── auth.service.js
+    │   ├── backup.service.js
+    │   ├── cloudStorage.service.js
+    │   ├── database.service.js
+    │   ├── email.service.js
+    │   ├── schedule.service.js
+    │   ├── token.service.js
+    │   └── user.service.js
+    │
+    ├── utils/
+    │   ├── ApiError.js
+    │   ├── catchAsync.js
+    │   ├── database.js
+    │   ├── pick.js
+    │   ├── cloudStorage/
+    │   │   ├── index.js
+    │   │   ├── googleDrive.connector.js
+    │   │   └── s3.connector.js
+    │   └── dbConnectors/
+    │       ├── index.js
+    │       ├── mongodb.connector.js
+    │       ├── mysql.connector.js
+    │       └── postgresql.connector.js
+    │
+    └── validations/
+        ├── index.js
+        ├── auth.validation.js
+        ├── custom.validation.js
+        └── user.validation.js
+
+
+FRONTEND (./frontend)
+├── Configuration Files
+│   ├── package.json
+│   ├── package-lock.json
+│   ├── .env
+│   ├── .env.example
+│   ├── .gitignore
+│   ├── .gitattributes
+│   └── README.md
+│
+├── bin/
+│   └── create-rahat-react-template.js
+│
+├── public/
+│   ├── index.html
+│   ├── favicon.ico
+│   ├── logo192.png
+│   ├── logo512.png
+│   ├── manifest.json
+│   ├── robots.txt
+│   ├── rahatsistem-logo.png
+│   └── images/
+│       └── login-pages.png
+│
+└── src/
+    ├── index.js
+    ├── index.css
+    ├── App.js
+    ├── App.css
+    ├── App.test.js
+    ├── logo.svg
+    ├── theme.js
+    ├── locale.tr.js
+    ├── reportWebVitals.js
+    ├── setupTests.js
+    │
+    ├── api/
+    │   ├── axiosInstance.js
+    │   ├── requestTemplates.js
+    │   ├── auth/
+    │   │   ├── login.js
+    │   │   ├── logout.js
+    │   │   ├── refreshToken.js
+    │   │   ├── forgotPassword.js
+    │   │   └── resetPassword.js
+    │   ├── backup/
+    │   │   └── index.js
+    │   ├── cloudStorage/
+    │   │   └── index.js
+    │   ├── database/
+    │   │   └── index.js
+    │   ├── gridList/
+    │   │   └── getTaxPayerList/
+    │   │       └── index.js
+    │   └── notification/
+    │       └── index.js
+    │
+    ├── assets/
+    │   └── images/
+    │       ├── by-rahatsistem-logo.png
+    │       ├── rahatsistem-logo.png
+    │       ├── images1.jpg
+    │       ├── images2.jpg
+    │       └── images3.png
+    │
+    ├── components/
+    │   ├── adminSideBar/
+    │   │   └── adminSideBar.js
+    │   ├── AnimatedAlerts/
+    │   │   └── index.js
+    │   ├── Buttons/
+    │   │   └── buttons.js
+    │   ├── DateRangePicker/
+    │   │   ├── index.js
+    │   │   └── day.css
+    │   ├── GridHeader/
+    │   │   └── index.js
+    │   ├── GridSideBar/
+    │   │   └── gridSideBar.js
+    │   ├── loadingSwal/
+    │   │   └── index.js
+    │   ├── navbar/
+    │   │   ├── navbar.js
+    │   │   ├── appsMenu.js
+    │   │   └── profilMenu.js
+    │   └── sideBar/
+    │       └── sideBar.js
+    │
+    ├── layouts/
+    │   ├── AdminLayout.js
+    │   └── MainLayout.js
+    │
+    ├── pages/
+    │   ├── index.js
+    │   ├── adminPage/
+    │   │   ├── adminPage.js
+    │   │   ├── adminUsers.js
+    │   │   ├── adminProfilePage.js
+    │   │   ├── adminProfileInfoPage.js
+    │   │   ├── adminProfileSettingsPage.js
+    │   │   └── columnDefs.js
+    │   ├── backupHistory/
+    │   │   └── BackupHistoryList.js
+    │   ├── backupJobs/
+    │   │   └── BackupJobsList.js
+    │   ├── cloudStorage/
+    │   │   ├── CloudStorageList.js
+    │   │   └── CloudStorageFormModal.js
+    │   ├── ComponentsPage/
+    │   │   ├── index.js
+    │   │   ├── columnDefs.js
+    │   │   ├── detailsGrid.js
+    │   │   └── formModal.js
+    │   ├── dashboard/
+    │   │   └── Dashboard.js
+    │   ├── databases/
+    │   │   ├── DatabaseList.js
+    │   │   ├── DatabaseFormModal.js
+    │   │   └── BackupJobFormModal.js
+    │   ├── forgotPassword/
+    │   │   └── forgotPassword.js
+    │   ├── gridPageTemplate/
+    │   │   ├── index.js
+    │   │   ├── columnDefs.js
+    │   │   ├── detailsGrid.js
+    │   │   └── formModal.js
+    │   ├── homePage/
+    │   │   └── homePage.js
+    │   ├── landingPage/
+    │   │   └── index.js
+    │   ├── loginPage/
+    │   │   └── loginPage.js
+    │   ├── notifications/
+    │   │   └── EmailNotificationSettings.js
+    │   ├── profilePage/
+    │   │   ├── userProfile.js
+    │   │   ├── userProfileInfoPage.js
+    │   │   └── userProfileSettingsPage.js
+    │   └── registerPage/
+    │       └── register.js
+    │
+    └── utils/
+        ├── checkToken/
+        │   └── CheckToken.js
+        ├── cookie/
+        │   └── index.js
+        ├── delay/
+        │   └── index.js
+        └── emailFormatControl/
+            └── index.js
+
+
+TOPLAM İSTATİSTİKLER
+=====================
+- Backend dosya sayısı: ~100 dosya (node_modules hariç)
+- Frontend dosya sayısı: ~97 dosya (node_modules hariç)
+- Toplam: ~197 dosya (node_modules ve backups hariç)
+
+KULLANILAN TEKNOLOJİLER
+========================
+Backend:
+- Node.js + Express.js
+- Prisma ORM
+- PostgreSQL/MySQL/MongoDB desteği
+- JWT Authentication
+- Passport.js
+- Node-cron (Zamanlanmış yedekler)
+- AWS S3 & Google Drive entegrasyonu
+- Email servisi
+
+Frontend:
+- React.js
+- Material-UI (MUI)
+- AG-Grid
+- Axios
+- SweetAlert2
+- React Router
+
+ÖZEL ÖZELLIKLER
+================
+✓ Otomatik veritabanı yedekleme sistemi
+✓ Çoklu veritabanı desteği (PostgreSQL, MySQL, MongoDB)
+✓ Cloud storage entegrasyonu (S3, Google Drive)
+✓ Zamanlanmış yedekler (cron jobs)
+✓ Email bildirimleri
+✓ Kullanıcı yönetimi ve rol tabanlı yetkilendirme
+✓ Admin paneli

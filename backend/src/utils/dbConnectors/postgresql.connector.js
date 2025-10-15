@@ -119,11 +119,29 @@ const restoreBackup = async (config, backupFilePath) => {
     PGPASSWORD: config.password,
   };
 
-  const command = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -f "${backupFilePath}"`;
+  // Terminate all active connections to the database before dropping
+  const terminateConnectionsCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d postgres -c "SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${config.database}' AND pid <> pg_backend_pid();"`;
+
+  // Drop and recreate the database to ensure clean restore
+  const dropCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d postgres -c "DROP DATABASE IF EXISTS ${config.database};"`;
+  const createCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d postgres -c "CREATE DATABASE ${config.database};"`;
+  const restoreCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -f "${backupFilePath}"`;
 
   try {
     const startTime = Date.now();
-    await execPromise(command, { env, maxBuffer: 1024 * 1024 * 100 });
+
+    // Terminate all active connections first
+    await execPromise(terminateConnectionsCommand, { env, maxBuffer: 1024 * 1024 * 100 });
+
+    // Drop existing database
+    await execPromise(dropCommand, { env, maxBuffer: 1024 * 1024 * 100 });
+
+    // Create fresh database
+    await execPromise(createCommand, { env, maxBuffer: 1024 * 1024 * 100 });
+
+    // Restore from backup
+    await execPromise(restoreCommand, { env, maxBuffer: 1024 * 1024 * 100 });
+
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
     return {
