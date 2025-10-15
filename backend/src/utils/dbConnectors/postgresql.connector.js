@@ -126,7 +126,7 @@ const restoreBackup = async (config, backupFilePath) => {
   // Drop and recreate schema (cleanest method without disconnecting users)
   // This removes all tables, sequences, functions, triggers, constraints, etc.
   // Database stays alive, so active connections won't be terminated
-  const dropSchemaCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO postgres; GRANT ALL ON SCHEMA public TO public;"`;
+  const dropSchemaCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO ${config.username}; GRANT ALL ON SCHEMA public TO public;"`;
 
   const restoreCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -f "${backupFilePath}"`;
 
