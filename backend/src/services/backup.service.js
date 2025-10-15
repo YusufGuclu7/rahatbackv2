@@ -508,24 +508,59 @@ const restoreBackup = async (historyId, userId) => {
     throw new ApiError(httpStatus.BAD_REQUEST, 'Only successful backups can be restored');
   }
 
-  // Check if file exists
-  try {
-    await fs.access(backup.filePath);
-  } catch {
-    throw new ApiError(httpStatus.NOT_FOUND, 'Backup file not found');
-  }
-
   // Get database config with decrypted password
   const dbConfig = await databaseService.getDatabaseConfig(backup.databaseId);
 
+  // Get backup file path (handles cloud storage downloads)
+  let localFilePath = backup.filePath;
+  let shouldCleanupDownloadedFile = false;
+
+  // Check if backup is from cloud storage
+  const backupJob = await backupJobModel.findById(backup.backupJobId);
+
+  if (backupJob.cloudStorageId && (backupJob.storageType === 'google_drive' || backupJob.storageType === 's3')) {
+    const cloudStorage = await cloudStorageModel.findById(backupJob.cloudStorageId);
+
+    if (cloudStorage && cloudStorage.isActive) {
+      // Create temporary download path
+      const tempDownloadPath = path.join(BACKUP_STORAGE_PATH, 'temp', backup.fileName);
+      await fs.mkdir(path.dirname(tempDownloadPath), { recursive: true });
+
+      const cloudConnector = getCloudStorageConnector(cloudStorage.storageType);
+
+      // Download from cloud storage
+      logger.info(`Downloading backup from ${cloudStorage.storageType} for restore: ${backup.filePath}`);
+      const downloadResult = await cloudConnector.downloadBackup(
+        cloudStorage,
+        backup.filePath, // This is the cloud fileId or S3 key
+        tempDownloadPath
+      );
+
+      if (!downloadResult.success) {
+        throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, `Failed to download from cloud: ${downloadResult.error}`);
+      }
+
+      localFilePath = tempDownloadPath;
+      shouldCleanupDownloadedFile = true;
+      logger.info(`Successfully downloaded backup to ${localFilePath}`);
+    }
+  } else {
+    // Local file - check if exists
+    try {
+      await fs.access(localFilePath);
+    } catch {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Backup file not found');
+    }
+  }
+
   // Handle compressed files
-  let filePathToRestore = backup.filePath;
-  let needsCleanup = false;
+  let filePathToRestore = localFilePath;
+  let needsCleanup = shouldCleanupDownloadedFile;
 
   if (backup.fileName.endsWith('.gz')) {
     // Decompress the file
-    const decompressedPath = backup.filePath.replace('.gz', '');
-    const inputStream = fsSync.createReadStream(backup.filePath);
+    const decompressedPath = localFilePath.replace('.gz', '');
+    const inputStream = fsSync.createReadStream(localFilePath);
     const outputStream = fsSync.createWriteStream(decompressedPath);
     const gunzip = zlib.createGunzip();
 
@@ -570,12 +605,19 @@ const restoreBackup = async (historyId, userId) => {
     logger.error(`Restore failed for backup ${historyId}: ${error.message}`);
     throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, `Restore failed: ${error.message}`);
   } finally {
-    // Clean up decompressed file if created
+    // Clean up temporary files
     if (needsCleanup) {
       try {
-        await fs.unlink(filePathToRestore);
+        // Clean up decompressed file if created
+        if (backup.fileName.endsWith('.gz') && filePathToRestore !== localFilePath) {
+          await fs.unlink(filePathToRestore);
+        }
+        // Clean up downloaded file from cloud storage
+        if (shouldCleanupDownloadedFile) {
+          await fs.unlink(localFilePath);
+        }
       } catch (error) {
-        logger.error(`Failed to cleanup decompressed file: ${error.message}`);
+        logger.error(`Failed to cleanup temporary files: ${error.message}`);
       }
     }
   }
