@@ -83,8 +83,9 @@ const createBackup = async (config, outputPath) => {
     PGPASSWORD: config.password,
   };
 
-  // Build pg_dump command
-  const command = `"${PG_DUMP}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -F p -f "${filePath}"`;
+  // Build pg_dump command (without -C to avoid locale encoding issues)
+  // We'll add CREATE DATABASE manually with safe UTF8 locale
+  const command = `"${PG_DUMP}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -F p --encoding=UTF8 -f "${filePath}"`;
 
   try {
     const startTime = Date.now();
@@ -93,6 +94,22 @@ const createBackup = async (config, outputPath) => {
       maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
       timeout: 30 * 60 * 1000 // 30 minutes timeout for very large backups
     });
+
+    // Prepend CREATE DATABASE command with UTF8 locale (avoiding Windows Turkish locale issues)
+    const backupContent = await fs.readFile(filePath, 'utf8');
+    const createDbCommand = `--
+-- Database creation with UTF8 encoding (safe for all platforms)
+--
+
+CREATE DATABASE ${config.database} WITH ENCODING = 'UTF8' LC_COLLATE = 'C' LC_CTYPE = 'C' TEMPLATE = template0;
+
+ALTER DATABASE ${config.database} OWNER TO ${config.username};
+
+\\connect ${config.database}
+
+`;
+    await fs.writeFile(filePath, createDbCommand + backupContent, 'utf8');
+
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
     // Get file size
@@ -123,37 +140,59 @@ const restoreBackup = async (config, backupFilePath) => {
     PGPASSWORD: config.password,
   };
 
-  // Drop and recreate schema (cleanest method without disconnecting users)
-  // This removes all tables, sequences, functions, triggers, constraints, etc.
-  // Database stays alive, so active connections won't be terminated
-  const dropSchemaCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO ${config.username}; GRANT ALL ON SCHEMA public TO public;"`;
-
-  const restoreCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -f "${backupFilePath}"`;
-
   try {
     const startTime = Date.now();
 
-    // Drop all database objects (tables, sequences, etc.) by dropping schema
-    // This is safer than dropping database - keeps connections alive
-    await execPromise(dropSchemaCommand, {
-      env,
-      maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
-      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large restores
-    });
+    // Check if database exists
+    const checkDbCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${config.database}'"`;
 
-    // Restore from backup (recreates all tables, sequences with correct values, constraints, etc.)
-    await execPromise(restoreCommand, {
-      env,
-      maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
-      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large restores
-    });
+    let databaseExists = false;
+    try {
+      const result = await execPromise(checkDbCommand, { env, timeout: 10000 });
+      databaseExists = result.stdout.trim() === '1';
+    } catch (error) {
+      // If check fails, assume database doesn't exist
+      databaseExists = false;
+    }
+
+    if (databaseExists) {
+      // Database exists - drop schema and restore (keeps connections alive)
+      const dropSchemaCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO ${config.username}; GRANT ALL ON SCHEMA public TO public;"`;
+
+      await execPromise(dropSchemaCommand, {
+        env,
+        maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
+        timeout: 30 * 60 * 1000 // 30 minutes timeout
+      });
+
+      // Restore to existing database
+      const restoreCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -f "${backupFilePath}"`;
+
+      await execPromise(restoreCommand, {
+        env,
+        maxBuffer: 1024 * 1024 * 500,
+        timeout: 30 * 60 * 1000
+      });
+    } else {
+      // Database doesn't exist - restore to postgres database (backup contains CREATE DATABASE)
+      // The -C flag in backup will create the database automatically
+      const restoreCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d postgres -f "${backupFilePath}"`;
+
+      await execPromise(restoreCommand, {
+        env,
+        maxBuffer: 1024 * 1024 * 500,
+        timeout: 30 * 60 * 1000
+      });
+    }
 
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
     return {
       success: true,
       duration,
-      message: 'Restore completed successfully',
+      message: databaseExists
+        ? 'Restore completed successfully (database content refreshed)'
+        : 'Restore completed successfully (database recreated)',
     };
   } catch (error) {
     return {

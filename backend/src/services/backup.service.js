@@ -452,10 +452,11 @@ const getBackupFilePath = async (id, userId) => {
   }
 
   // Check if backup is from cloud storage
-  const backupJob = await backupJobModel.findById(backup.backupJobId);
+  // Handle old backups that might not have a backupJobId
+  const backupJob = backup.backupJobId ? await backupJobModel.findById(backup.backupJobId) : null;
 
   // If cloud storage (Google Drive or S3), download first
-  if (backupJob.cloudStorageId && (backupJob.storageType === 'google_drive' || backupJob.storageType === 's3')) {
+  if (backupJob && backupJob.cloudStorageId && (backupJob.storageType === 'google_drive' || backupJob.storageType === 's3')) {
     const cloudStorage = await cloudStorageModel.findById(backupJob.cloudStorageId);
 
     if (cloudStorage && cloudStorage.isActive) {
@@ -504,7 +505,8 @@ const deleteBackup = async (id, userId) => {
   const backup = await getBackupHistoryById(id, userId);
 
   // Check if backup is from cloud storage
-  const backupJob = await backupJobModel.findById(backup.backupJobId);
+  // Handle old backups that might not have a backupJobId
+  const backupJob = backup.backupJobId ? await backupJobModel.findById(backup.backupJobId) : null;
 
   if (backupJob && backupJob.cloudStorageId && (backupJob.storageType === 'google_drive' || backupJob.storageType === 's3')) {
     // Delete from cloud storage
@@ -566,9 +568,10 @@ const restoreBackup = async (historyId, userId) => {
   let shouldCleanupDownloadedFile = false;
 
   // Check if backup is from cloud storage
-  const backupJob = await backupJobModel.findById(backup.backupJobId);
+  // Handle old backups that might not have a backupJobId
+  const backupJob = backup.backupJobId ? await backupJobModel.findById(backup.backupJobId) : null;
 
-  if (backupJob.cloudStorageId && (backupJob.storageType === 'google_drive' || backupJob.storageType === 's3')) {
+  if (backupJob && backupJob.cloudStorageId && (backupJob.storageType === 'google_drive' || backupJob.storageType === 's3')) {
     const cloudStorage = await cloudStorageModel.findById(backupJob.cloudStorageId);
 
     if (cloudStorage && cloudStorage.isActive) {
