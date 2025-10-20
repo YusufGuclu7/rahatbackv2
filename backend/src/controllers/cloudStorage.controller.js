@@ -1,7 +1,7 @@
 const httpStatus = require('http-status');
 const catchAsync = require('../utils/catchAsync');
 const { cloudStorageService } = require('../services');
-const { googleDriveConnector } = require('../utils/cloudStorage');
+const { googleDriveConnector, awsS3Connector } = require('../utils/cloudStorage');
 
 /**
  * Create cloud storage configuration

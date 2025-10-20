@@ -42,7 +42,7 @@ const CloudStorageFormModal = ({ open, onClose, storage, onSuccess }) => {
 
   const [loading, setLoading] = useState(false);
 
-  // Global message listener for OAuth popup
+  // Global message listener for Google Drive OAuth popup
   useEffect(() => {
     const messageHandler = (event) => {
       console.log('=== Global message received ===');
@@ -55,6 +55,7 @@ const CloudStorageFormModal = ({ open, onClose, storage, onSuccess }) => {
         return;
       }
 
+      // Google Drive Auth Success
       if (event.data.type === 'GOOGLE_DRIVE_AUTH_SUCCESS') {
         console.log('✅ SUCCESS! Received refresh token:', event.data.refreshToken);
         console.log('✅ Setting form data with token...');
@@ -76,7 +77,9 @@ const CloudStorageFormModal = ({ open, onClose, storage, onSuccess }) => {
           timer: 3000,
           showConfirmButton: false,
         });
-      } else if (event.data.type === 'GOOGLE_DRIVE_AUTH_FAILED') {
+      }
+      // Google Drive Auth Failed
+      else if (event.data.type === 'GOOGLE_DRIVE_AUTH_FAILED') {
         console.log('❌ FAILED! Error:', event.data.error);
         Swal.close();
         Swal.fire({
@@ -270,27 +273,9 @@ const CloudStorageFormModal = ({ open, onClose, storage, onSuccess }) => {
               <>
                 <Alert severity="info" sx={{ mt: 2 }}>
                   AWS S3, MinIO, DigitalOcean Spaces ve diğer S3-uyumlu servisler desteklenmektedir.
+                  <br />
+                  <strong>Not:</strong> Bilgileriniz şifrelenmiş olarak saklanacaktır.
                 </Alert>
-
-                <TextField
-                  label="Region"
-                  name="s3Region"
-                  value={formData.s3Region}
-                  onChange={handleChange}
-                  required
-                  fullWidth
-                  helperText="Örn: us-east-1, eu-central-1"
-                />
-
-                <TextField
-                  label="Bucket Name"
-                  name="s3Bucket"
-                  value={formData.s3Bucket}
-                  onChange={handleChange}
-                  required
-                  fullWidth
-                  helperText="S3 bucket adınız"
-                />
 
                 <TextField
                   label="Access Key ID"
@@ -299,6 +284,8 @@ const CloudStorageFormModal = ({ open, onClose, storage, onSuccess }) => {
                   onChange={handleChange}
                   required
                   fullWidth
+                  placeholder="AKIAIOSFODNN7EXAMPLE"
+                  helperText="AWS IAM kullanıcınızın Access Key ID'si"
                 />
 
                 <TextField
@@ -309,6 +296,34 @@ const CloudStorageFormModal = ({ open, onClose, storage, onSuccess }) => {
                   type="password"
                   required
                   fullWidth
+                  placeholder="wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY"
+                  helperText="AWS IAM kullanıcınızın Secret Access Key'i"
+                />
+
+                <FormControl fullWidth required>
+                  <InputLabel>Region</InputLabel>
+                  <Select name="s3Region" value={formData.s3Region} onChange={handleChange} label="Region">
+                    <MenuItem value="us-east-1">US East (N. Virginia) - us-east-1</MenuItem>
+                    <MenuItem value="us-west-1">US West (N. California) - us-west-1</MenuItem>
+                    <MenuItem value="us-west-2">US West (Oregon) - us-west-2</MenuItem>
+                    <MenuItem value="eu-west-1">EU (Ireland) - eu-west-1</MenuItem>
+                    <MenuItem value="eu-central-1">EU (Frankfurt) - eu-central-1</MenuItem>
+                    <MenuItem value="eu-west-2">EU (London) - eu-west-2</MenuItem>
+                    <MenuItem value="ap-southeast-1">Asia Pacific (Singapore) - ap-southeast-1</MenuItem>
+                    <MenuItem value="ap-northeast-1">Asia Pacific (Tokyo) - ap-northeast-1</MenuItem>
+                    <MenuItem value="ap-south-1">Asia Pacific (Mumbai) - ap-south-1</MenuItem>
+                  </Select>
+                </FormControl>
+
+                <TextField
+                  label="Bucket Name"
+                  name="s3Bucket"
+                  value={formData.s3Bucket}
+                  onChange={handleChange}
+                  required
+                  fullWidth
+                  placeholder="my-backup-bucket"
+                  helperText="S3 bucket adınız"
                 />
 
                 <TextField
@@ -317,6 +332,7 @@ const CloudStorageFormModal = ({ open, onClose, storage, onSuccess }) => {
                   value={formData.s3Endpoint}
                   onChange={handleChange}
                   fullWidth
+                  placeholder="https://s3.example.com"
                   helperText="MinIO, DigitalOcean Spaces vb. için endpoint URL"
                 />
               </>

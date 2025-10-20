@@ -110,28 +110,29 @@ model NotificationSettings {
 }
 
 model CloudStorage {
-  id                Int              @id @default(autoincrement())
-  userId            Int
-  name              String
-  storageType       StorageType
-  isActive          Boolean          @default(true)
-  isDefault         Boolean          @default(false)
+  id                    Int              @id @default(autoincrement())
+  userId                Int
+  name                  String
+  storageType           StorageType
+  isActive              Boolean          @default(true)
+  isDefault             Boolean          @default(false)
 
   // AWS S3 Configuration
-  s3Region          String?
-  s3Bucket          String?
-  s3AccessKeyId     String?
-  s3SecretAccessKey String?
-  s3Endpoint        String?
+  s3Region              String?
+  s3Bucket              String?
+  s3AccessKeyId         String?          // Deprecated - use s3EncryptedCredentials
+  s3SecretAccessKey     String?          // Deprecated - use s3EncryptedCredentials
+  s3Endpoint            String?
+  s3EncryptedCredentials String?         // New encrypted credentials field
 
   // Google Drive Configuration
-  gdRefreshToken    String?
-  gdFolderId        String?
+  gdRefreshToken        String?
+  gdFolderId            String?
 
-  createdAt         DateTime         @default(now())
-  updatedAt         DateTime         @updatedAt
-  user              User             @relation(fields: [userId], references: [id], onDelete: Cascade)
-  BackupJob         BackupJob[]
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+  user                  User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  BackupJob             BackupJob[]
 }
 
 enum Role {

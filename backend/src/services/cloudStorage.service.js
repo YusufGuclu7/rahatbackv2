@@ -1,6 +1,6 @@
 const httpStatus = require('http-status');
 const { cloudStorageModel } = require('../models');
-const { getCloudStorageConnector } = require('../utils/cloudStorage');
+const { getCloudStorageConnector, awsS3Connector } = require('../utils/cloudStorage');
 const ApiError = require('../utils/ApiError');
 const logger = require('../config/logger');
 
@@ -11,6 +11,25 @@ const createCloudStorage = async (userId, storageData) => {
   // If this is set as default, unset other defaults
   if (storageData.isDefault) {
     await cloudStorageModel.setAsDefault(null, userId, storageData.storageType);
+  }
+
+  // Encrypt AWS S3 credentials if provided
+  if (storageData.storageType === 's3' && storageData.s3AccessKeyId && storageData.s3SecretAccessKey) {
+    // Trim credentials to remove any whitespace/newline characters
+    const accessKeyId = storageData.s3AccessKeyId.trim();
+    const secretAccessKey = storageData.s3SecretAccessKey.trim();
+
+    logger.info(`Encrypting AWS credentials - AccessKey: ${accessKeyId.substring(0, 8)}... (len: ${accessKeyId.length}), SecretKey length: ${secretAccessKey.length}`);
+
+    const encrypted = awsS3Connector.encryptCredentials(
+      accessKeyId,
+      secretAccessKey
+    );
+
+    storageData.s3EncryptedCredentials = JSON.stringify(encrypted);
+    // Clear plain text credentials
+    delete storageData.s3AccessKeyId;
+    delete storageData.s3SecretAccessKey;
   }
 
   const cloudStorage = await cloudStorageModel.create({
@@ -51,6 +70,25 @@ const updateCloudStorage = async (id, userId, updateData) => {
   // If setting as default, unset other defaults
   if (updateData.isDefault && !cloudStorage.isDefault) {
     await cloudStorageModel.setAsDefault(id, userId, cloudStorage.storageType);
+  }
+
+  // Encrypt AWS S3 credentials if provided
+  if (updateData.storageType === 's3' && updateData.s3AccessKeyId && updateData.s3SecretAccessKey) {
+    // Trim credentials to remove any whitespace/newline characters
+    const accessKeyId = updateData.s3AccessKeyId.trim();
+    const secretAccessKey = updateData.s3SecretAccessKey.trim();
+
+    logger.info(`Encrypting AWS credentials - AccessKey: ${accessKeyId.substring(0, 8)}... (len: ${accessKeyId.length}), SecretKey length: ${secretAccessKey.length}`);
+
+    const encrypted = awsS3Connector.encryptCredentials(
+      accessKeyId,
+      secretAccessKey
+    );
+
+    updateData.s3EncryptedCredentials = JSON.stringify(encrypted);
+    // Clear plain text credentials
+    delete updateData.s3AccessKeyId;
+    delete updateData.s3SecretAccessKey;
   }
 
   return await cloudStorageModel.update(id, updateData);
