@@ -234,17 +234,17 @@ Add **ALL** your environments to Authorized redirect URIs:
 
 **Development:**
 ```
-http://localhost:3000/api/v1/cloud-storage/google-drive/callback
+http://localhost:3000/v1/cloud-storage/google-drive/callback
 ```
 
 **Staging:**
 ```
-https://staging.yourdomain.com/api/v1/cloud-storage/google-drive/callback
+https://staging.yourdomain.com/v1/cloud-storage/google-drive/callback
 ```
 
 **Production:**
 ```
-https://yourdomain.com/api/v1/cloud-storage/google-drive/callback
+https://yourdomain.com/v1/cloud-storage/google-drive/callback
 ```
 
 ⚠️ **Common Mistakes:**
@@ -266,14 +266,14 @@ After creating OAuth client:
 ```env
 GOOGLE_CLIENT_ID=123456789-abcdefghijklmnop.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret-here
-GOOGLE_REDIRECT_URI=http://localhost:3000/api/v1/cloud-storage/google-drive/callback
+GOOGLE_REDIRECT_URI=http://localhost:3000/v1/cloud-storage/google-drive/callback
 ```
 
 #### Production:
 ```env
 GOOGLE_CLIENT_ID=123456789-abcdefghijklmnop.apps.googleusercontent.com
 GOOGLE_CLIENT_SECRET=GOCSPX-your-client-secret-here
-GOOGLE_REDIRECT_URI=https://yourdomain.com/api/v1/cloud-storage/google-drive/callback
+GOOGLE_REDIRECT_URI=https://yourdomain.com/v1/cloud-storage/google-drive/callback
 ```
 
 ### Step 7: OAuth Consent Screen Setup

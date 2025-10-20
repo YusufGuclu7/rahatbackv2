@@ -11,7 +11,7 @@ const createDriveClient = (refreshToken) => {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/v1/cloud-storage/google-drive/callback'
+    process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/v1/cloud-storage/google-drive/callback'
   );
 
   oauth2Client.setCredentials({
@@ -218,7 +218,7 @@ const getAuthUrl = () => {
   const oauth2Client = new google.auth.OAuth2(
     process.env.GOOGLE_CLIENT_ID,
     process.env.GOOGLE_CLIENT_SECRET,
-    process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/v1/cloud-storage/google-drive/callback'
+    process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/v1/cloud-storage/google-drive/callback'
   );
 
   const scopes = ['https://www.googleapis.com/auth/drive.file'];
@@ -238,7 +238,7 @@ const getTokensFromCode = async (code) => {
     const oauth2Client = new google.auth.OAuth2(
       process.env.GOOGLE_CLIENT_ID,
       process.env.GOOGLE_CLIENT_SECRET,
-      process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/api/v1/cloud-storage/google-drive/callback'
+      process.env.GOOGLE_REDIRECT_URI || 'http://localhost:3000/v1/cloud-storage/google-drive/callback'
     );
 
     const { tokens } = await oauth2Client.getToken(code);
