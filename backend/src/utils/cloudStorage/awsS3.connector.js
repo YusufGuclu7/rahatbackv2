@@ -6,8 +6,63 @@ const logger = require('../../config/logger');
 const crypto = require('crypto');
 
 // Encryption for storing credentials securely
-const ENCRYPTION_KEY = process.env.AWS_CREDENTIALS_ENCRYPTION_KEY || crypto.randomBytes(32).toString('hex');
+// CRITICAL: This key must be set in environment variables and remain constant
+// If this key changes, all encrypted credentials will become unreadable
+if (!process.env.AWS_CREDENTIALS_ENCRYPTION_KEY) {
+  throw new Error(
+    'CRITICAL SECURITY ERROR: AWS_CREDENTIALS_ENCRYPTION_KEY environment variable is required!\n' +
+    'This key is used to encrypt/decrypt AWS credentials in the database.\n' +
+    'Generate a secure key using: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"\n' +
+    'Add it to your .env file: AWS_CREDENTIALS_ENCRYPTION_KEY=your-64-character-hex-key\n' +
+    'WARNING: Never change this key after initial setup, or all stored credentials will be lost!'
+  );
+}
+
+// Validate key format (must be 64 hex characters = 32 bytes)
+if (!/^[0-9a-fA-F]{64}$/.test(process.env.AWS_CREDENTIALS_ENCRYPTION_KEY)) {
+  throw new Error(
+    'INVALID AWS_CREDENTIALS_ENCRYPTION_KEY: Must be exactly 64 hexadecimal characters.\n' +
+    'Generate a valid key using: node -e "console.log(require(\'crypto\').randomBytes(32).toString(\'hex\'))"\n' +
+    'Current key length: ' + (process.env.AWS_CREDENTIALS_ENCRYPTION_KEY?.length || 0)
+  );
+}
+
+const ENCRYPTION_KEY = process.env.AWS_CREDENTIALS_ENCRYPTION_KEY;
 const ALGORITHM = 'aes-256-gcm';
+
+/**
+ * Validate S3 endpoint URL format
+ */
+const validateS3Endpoint = (endpoint) => {
+  if (!endpoint) return { valid: true }; // Endpoint is optional
+
+  try {
+    const url = new URL(endpoint);
+
+    // Must be HTTP or HTTPS
+    if (!['http:', 'https:'].includes(url.protocol)) {
+      return {
+        valid: false,
+        error: 'S3 endpoint must use HTTP or HTTPS protocol'
+      };
+    }
+
+    // Must have a hostname
+    if (!url.hostname) {
+      return {
+        valid: false,
+        error: 'S3 endpoint must include a valid hostname'
+      };
+    }
+
+    return { valid: true };
+  } catch (error) {
+    return {
+      valid: false,
+      error: `Invalid S3 endpoint URL format: ${error.message}`
+    };
+  }
+};
 
 /**
  * Encrypt AWS credentials
@@ -50,6 +105,14 @@ const decryptCredentials = (encryptedData) => {
  * Create S3 client
  */
 const createS3Client = (config) => {
+  // Validate endpoint if provided
+  if (config.s3Endpoint) {
+    const validation = validateS3Endpoint(config.s3Endpoint);
+    if (!validation.valid) {
+      throw new Error(validation.error);
+    }
+  }
+
   let credentials;
 
   // If encrypted credentials exist, decrypt them
@@ -130,6 +193,17 @@ const testConnection = async (config) => {
  */
 const listBuckets = async (accessKeyId, secretAccessKey, region = 'us-east-1', endpoint = null) => {
   try {
+    // Validate endpoint if provided
+    if (endpoint) {
+      const validation = validateS3Endpoint(endpoint);
+      if (!validation.valid) {
+        return {
+          success: false,
+          error: validation.error,
+        };
+      }
+    }
+
     const clientConfig = {
       region,
       credentials: {
