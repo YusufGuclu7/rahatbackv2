@@ -111,6 +111,7 @@ const testConnection = {
 
 const testConnectionWithCredentials = {
   body: Joi.object().keys({
+    name: Joi.string().optional().allow(''),
     type: Joi.string()
       .required()
       .valid('postgresql', 'mysql', 'mongodb', 'mssql', 'mariadb'),
@@ -132,6 +133,7 @@ const testConnectionWithCredentials = {
       .pattern(/^[a-zA-Z0-9_\-]+$/),
     connectionString: Joi.string().max(2000).allow('', null),
     sslEnabled: Joi.boolean().default(false),
+    isActive: Joi.boolean().optional(),
   }),
 };
 

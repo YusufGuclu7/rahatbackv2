@@ -86,11 +86,27 @@ const createBackup = async (config, outputPath) => {
 
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
   const fileName = `${safeDatabase}_${timestamp}.bak`;
-  const filePath = path.join(outputPath, fileName);
 
-  // Use T-SQL BACKUP DATABASE command
-  // MSSQL backup files (.bak) are binary and already compressed
-  const backupQuery = `BACKUP DATABASE [${safeDatabase}] TO DISK = N'${filePath.replace(/'/g, "''")}' WITH FORMAT, INIT, COMPRESSION, STATS = 10`;
+  // MSSQL requires a path that SQL Server service can write to
+  // Use C:\Temp which is more accessible than user's temp folder
+  const tempBackupDir = 'C:\\Temp\\rahat-backup-mssql';
+
+  // Ensure temp directory exists
+  if (!fsSync.existsSync(tempBackupDir)) {
+    await fs.mkdir(tempBackupDir, { recursive: true });
+  }
+
+  const tempFilePath = path.join(tempBackupDir, fileName);
+  const finalFilePath = path.join(outputPath, fileName);
+
+  // Ensure output directory exists
+  if (!fsSync.existsSync(outputPath)) {
+    await fs.mkdir(outputPath, { recursive: true });
+  }
+
+  // Use T-SQL BACKUP DATABASE command to temp location
+  // Note: COMPRESSION is not supported in Express Edition, so we don't use it
+  const backupQuery = `BACKUP DATABASE [${safeDatabase}] TO DISK = N'${tempFilePath.replace(/'/g, "''")}' WITH FORMAT, INIT, STATS = 10`;
 
   try {
     const startTime = Date.now();
@@ -114,23 +130,52 @@ const createBackup = async (config, outputPath) => {
     await pool.request().query(backupQuery);
     await pool.close();
 
+    // Move backup file from temp to final destination
+    await fs.copyFile(tempFilePath, finalFilePath);
+
+    // Clean up temp file
+    try {
+      await fs.unlink(tempFilePath);
+    } catch (cleanupError) {
+      // Ignore cleanup errors
+    }
+
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
-    // Get file size
-    const stats = await fs.stat(filePath);
+    // Get file size from final location
+    const stats = await fs.stat(finalFilePath);
     const fileSize = stats.size;
 
     return {
       success: true,
       fileName,
-      filePath,
+      filePath: finalFilePath,
       fileSize,
       duration,
     };
   } catch (error) {
+    // Clean up temp file on error
+    try {
+      if (fsSync.existsSync(tempFilePath)) {
+        await fs.unlink(tempFilePath);
+      }
+    } catch (cleanupError) {
+      // Ignore cleanup errors
+    }
+
+    // MSSQL returns multiple errors - get the root cause
+    let detailedError = error.message;
+
+    // Check for preceding errors (these usually contain the real cause)
+    if (error.precedingErrors && error.precedingErrors.length > 0) {
+      // Use the first preceding error as the main error (it's usually the root cause)
+      const firstError = error.precedingErrors[0];
+      detailedError = `${firstError.message} (Code: ${firstError.number})`;
+    }
+
     return {
       success: false,
-      error: error.message,
+      error: detailedError,
     };
   }
 };
@@ -154,6 +199,42 @@ const restoreBackup = async (config, backupFilePath) => {
   if (!backupFilePath || !fsSync.existsSync(backupFilePath)) {
     throw new Error('Invalid backup file path');
   }
+
+  // If backup is compressed (.gz), decompress it first
+  let actualBackupPath = backupFilePath;
+  let tempUncompressedPath = null;
+  let tempRestorePath = null;
+
+  if (backupFilePath.endsWith('.gz')) {
+    const zlib = require('zlib');
+    tempUncompressedPath = backupFilePath.replace(/\.gz$/, '');
+
+    // Decompress the file
+    const compressed = fsSync.createReadStream(backupFilePath);
+    const decompressed = fsSync.createWriteStream(tempUncompressedPath);
+    const gunzip = zlib.createGunzip();
+
+    await new Promise((resolve, reject) => {
+      compressed.pipe(gunzip).pipe(decompressed);
+      decompressed.on('finish', resolve);
+      decompressed.on('error', reject);
+      compressed.on('error', reject);
+      gunzip.on('error', reject);
+    });
+
+    actualBackupPath = tempUncompressedPath;
+  }
+
+  // Copy backup file to SQL Server accessible location
+  // SQL Server service might not have access to user folders
+  const tempBackupDir = 'C:\\Temp\\rahat-backup-mssql';
+  if (!fsSync.existsSync(tempBackupDir)) {
+    await fs.mkdir(tempBackupDir, { recursive: true });
+  }
+
+  tempRestorePath = path.join(tempBackupDir, `restore_${Date.now()}_${path.basename(actualBackupPath)}`);
+  await fs.copyFile(actualBackupPath, tempRestorePath);
+  actualBackupPath = tempRestorePath;
 
   const poolConfig = {
     server: safeHost,
@@ -192,7 +273,7 @@ const restoreBackup = async (config, backupFilePath) => {
     }
 
     // 2. Get logical file names from backup
-    const fileListQuery = `RESTORE FILELISTONLY FROM DISK = N'${backupFilePath.replace(/'/g, "''")}'`;
+    const fileListQuery = `RESTORE FILELISTONLY FROM DISK = N'${actualBackupPath.replace(/'/g, "''")}'`;
     const fileListResult = await pool.request().query(fileListQuery);
 
     const dataFile = fileListResult.recordset.find((f) => f.Type === 'D');
@@ -205,7 +286,7 @@ const restoreBackup = async (config, backupFilePath) => {
     // 3. Restore database with REPLACE option
     const restoreQuery = `
       RESTORE DATABASE [${safeDatabase}]
-      FROM DISK = N'${backupFilePath.replace(/'/g, "''")}'
+      FROM DISK = N'${actualBackupPath.replace(/'/g, "''")}'
       WITH FILE = 1,
       MOVE N'${dataFile.LogicalName}' TO N'${dataFile.PhysicalName}',
       MOVE N'${logFile.LogicalName}' TO N'${logFile.PhysicalName}',
@@ -223,6 +304,13 @@ const restoreBackup = async (config, backupFilePath) => {
 
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
+    // Clean up temp restore file
+    try {
+      await fs.unlink(tempRestorePath);
+    } catch (cleanupError) {
+      // Ignore cleanup errors
+    }
+
     return {
       success: true,
       duration,
@@ -239,6 +327,15 @@ const restoreBackup = async (config, backupFilePath) => {
         END
       `);
       await pool.close();
+    } catch (cleanupError) {
+      // Ignore cleanup errors
+    }
+
+    // Clean up temp restore file
+    try {
+      if (tempRestorePath && fsSync.existsSync(tempRestorePath)) {
+        await fs.unlink(tempRestorePath);
+      }
     } catch (cleanupError) {
       // Ignore cleanup errors
     }

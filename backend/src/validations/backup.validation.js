@@ -18,6 +18,7 @@ const createBackupJob = {
         'any.only': 'Schedule type must be one of: manual, hourly, daily, weekly, monthly, custom',
       }),
     cronExpression: Joi.string()
+      .allow('', null)
       .when('scheduleType', {
         is: 'custom',
         then: Joi.string()
@@ -26,7 +27,7 @@ const createBackupJob = {
           .messages({
             'string.pattern.base': 'Invalid cron expression format',
           }),
-        otherwise: Joi.forbidden(),
+        otherwise: Joi.optional().allow('', null),
       }),
     storageType: Joi.string()
       .required()
