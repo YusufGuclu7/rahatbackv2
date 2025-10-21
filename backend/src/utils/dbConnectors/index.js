@@ -1,6 +1,7 @@
 const postgresConnector = require('./postgresql.connector');
 const mysqlConnector = require('./mysql.connector');
 const mongodbConnector = require('./mongodb.connector');
+const mssqlConnector = require('./mssql.connector');
 
 /**
  * Get appropriate database connector based on type
@@ -11,6 +12,7 @@ const getConnector = (databaseType) => {
     mysql: mysqlConnector,
     mariadb: mysqlConnector, // MariaDB uses same connector as MySQL
     mongodb: mongodbConnector,
+    mssql: mssqlConnector,
   };
 
   const connector = connectors[databaseType.toLowerCase()];
@@ -26,4 +28,5 @@ module.exports = {
   postgresConnector,
   mysqlConnector,
   mongodbConnector,
+  mssqlConnector,
 };

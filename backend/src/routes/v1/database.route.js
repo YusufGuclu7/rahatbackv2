@@ -1,23 +1,30 @@
 const express = require('express');
 const auth = require('../../middlewares/auth');
+const validate = require('../../middlewares/validate');
 const databaseController = require('../../controllers/database.controller');
+const { databaseValidation } = require('../../validations');
 
 const router = express.Router();
 
 router
   .route('/')
-  .post(auth(), databaseController.createDatabase)
-  .get(auth(), databaseController.getDatabases);
+  .post(auth(), validate(databaseValidation.createDatabase), databaseController.createDatabase)
+  .get(auth(), validate(databaseValidation.getDatabases), databaseController.getDatabases);
 
-router.post('/test-connection', auth(), databaseController.testConnectionWithCredentials);
+router.post(
+  '/test-connection',
+  auth(),
+  validate(databaseValidation.testConnectionWithCredentials),
+  databaseController.testConnectionWithCredentials
+);
 
 router
   .route('/:databaseId')
-  .get(auth(), databaseController.getDatabase)
-  .patch(auth(), databaseController.updateDatabase)
-  .delete(auth(), databaseController.deleteDatabase);
+  .get(auth(), validate(databaseValidation.getDatabase), databaseController.getDatabase)
+  .patch(auth(), validate(databaseValidation.updateDatabase), databaseController.updateDatabase)
+  .delete(auth(), validate(databaseValidation.deleteDatabase), databaseController.deleteDatabase);
 
-router.post('/:databaseId/test', auth(), databaseController.testConnection);
-router.get('/:databaseId/size', auth(), databaseController.getDatabaseSize);
+router.post('/:databaseId/test', auth(), validate(databaseValidation.testConnection), databaseController.testConnection);
+router.get('/:databaseId/size', auth(), validate(databaseValidation.getDatabaseSize), databaseController.getDatabaseSize);
 
 module.exports = router;

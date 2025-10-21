@@ -2,9 +2,35 @@ const { MongoClient } = require('mongodb');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
+const os = require('os');
 
 const execPromise = promisify(exec);
+
+/**
+ * Validate and sanitize input to prevent command injection
+ */
+const validateInput = (value, fieldName, pattern = /^[a-zA-Z0-9_\-\.]+$/) => {
+  if (!value) {
+    throw new Error(`${fieldName} is required`);
+  }
+  if (!pattern.test(value)) {
+    throw new Error(`${fieldName} contains invalid characters`);
+  }
+  return value;
+};
+
+/**
+ * Escape shell arguments
+ */
+const escapeShellArg = (arg) => {
+  if (os.platform() === 'win32') {
+    return `"${arg.replace(/"/g, '""')}"`;
+  } else {
+    return `'${arg.replace(/'/g, "'\\''")}'`;
+  }
+};
 
 /**
  * Test MongoDB database connection
@@ -48,22 +74,47 @@ const testConnection = async (config) => {
  */
 const createBackup = async (config, outputPath) => {
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const folderName = `${config.database}_${timestamp}`;
-  const outputDir = path.join(outputPath, folderName);
-
-  // Build mongodump command
+  let folderName;
+  let outputDir;
   let command;
+
   if (config.connectionString) {
-    command = `mongodump --uri="${config.connectionString}" --out="${outputDir}"`;
+    // Use connection string (validate URL format but allow special chars)
+    if (!config.connectionString.startsWith('mongodb://') && !config.connectionString.startsWith('mongodb+srv://')) {
+      throw new Error('Invalid MongoDB connection string format');
+    }
+
+    // Extract database name from connection string for folder name
+    const dbMatch = config.connectionString.match(/\/([^/?]+)(\?|$)/);
+    const dbName = dbMatch ? dbMatch[1] : 'backup';
+    folderName = `${validateInput(dbName, 'database', /^[a-zA-Z0-9_\-]+$/)}_${timestamp}`;
+    outputDir = path.join(outputPath, folderName);
+
+    // Use connection string (properly escaped)
+    command = `mongodump --uri=${escapeShellArg(config.connectionString)} --out="${outputDir}"`;
   } else {
-    command = `mongodump --host ${config.host} --port ${config.port} --username ${config.username} --password ${config.password} --db ${config.database} --out="${outputDir}"`;
+    // Validate individual parameters
+    const safeHost = validateInput(config.host, 'host', /^[a-zA-Z0-9\.\-]+$/);
+    const safeUsername = validateInput(config.username, 'username', /^[a-zA-Z0-9_\-@\.]+$/);
+    const safeDatabase = validateInput(config.database, 'database', /^[a-zA-Z0-9_\-]+$/);
+    const safePort = parseInt(config.port, 10);
+
+    if (isNaN(safePort) || safePort < 1 || safePort > 65535) {
+      throw new Error('Invalid port number');
+    }
+
+    folderName = `${safeDatabase}_${timestamp}`;
+    outputDir = path.join(outputPath, folderName);
+
+    // Use --password via command (mongodump doesn't support env var)
+    command = `mongodump --host ${safeHost} --port ${safePort} --username ${escapeShellArg(safeUsername)} --password ${escapeShellArg(config.password)} --db ${safeDatabase} --out="${outputDir}"`;
   }
 
   try {
     const startTime = Date.now();
     await execPromise(command, {
       maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
-      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large backups
+      timeout: 30 * 60 * 1000, // 30 minutes timeout for very large backups
     });
     const duration = Math.floor((Date.now() - startTime) / 1000);
 
@@ -89,18 +140,37 @@ const createBackup = async (config, outputPath) => {
  * Restore MongoDB database from backup
  */
 const restoreBackup = async (config, backupFolderPath) => {
+  // Validate backup folder path
+  if (!backupFolderPath || !fsSync.existsSync(backupFolderPath)) {
+    throw new Error('Invalid backup folder path');
+  }
+
   let command;
   if (config.connectionString) {
-    command = `mongorestore --uri="${config.connectionString}" --drop "${backupFolderPath}"`;
+    // Validate connection string format
+    if (!config.connectionString.startsWith('mongodb://') && !config.connectionString.startsWith('mongodb+srv://')) {
+      throw new Error('Invalid MongoDB connection string format');
+    }
+    command = `mongorestore --uri=${escapeShellArg(config.connectionString)} --drop "${backupFolderPath}"`;
   } else {
-    command = `mongorestore --host ${config.host} --port ${config.port} --username ${config.username} --password ${config.password} --db ${config.database} --drop "${backupFolderPath}"`;
+    // Validate individual parameters
+    const safeHost = validateInput(config.host, 'host', /^[a-zA-Z0-9\.\-]+$/);
+    const safeUsername = validateInput(config.username, 'username', /^[a-zA-Z0-9_\-@\.]+$/);
+    const safeDatabase = validateInput(config.database, 'database', /^[a-zA-Z0-9_\-]+$/);
+    const safePort = parseInt(config.port, 10);
+
+    if (isNaN(safePort) || safePort < 1 || safePort > 65535) {
+      throw new Error('Invalid port number');
+    }
+
+    command = `mongorestore --host ${safeHost} --port ${safePort} --username ${escapeShellArg(safeUsername)} --password ${escapeShellArg(config.password)} --db ${safeDatabase} --drop "${backupFolderPath}"`;
   }
 
   try {
     const startTime = Date.now();
     await execPromise(command, {
       maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
-      timeout: 30 * 60 * 1000 // 30 minutes timeout for very large restores
+      timeout: 30 * 60 * 1000, // 30 minutes timeout for very large restores
     });
     const duration = Math.floor((Date.now() - startTime) / 1000);
 

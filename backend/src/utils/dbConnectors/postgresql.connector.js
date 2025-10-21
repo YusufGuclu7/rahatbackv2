@@ -2,10 +2,35 @@ const { Client } = require('pg');
 const { exec } = require('child_process');
 const { promisify } = require('util');
 const fs = require('fs').promises;
+const fsSync = require('fs');
 const path = require('path');
 const os = require('os');
 
 const execPromise = promisify(exec);
+
+/**
+ * Validate and sanitize input to prevent command injection
+ */
+const validateInput = (value, fieldName, pattern = /^[a-zA-Z0-9_\-\.]+$/) => {
+  if (!value) {
+    throw new Error(`${fieldName} is required`);
+  }
+  if (!pattern.test(value)) {
+    throw new Error(`${fieldName} contains invalid characters`);
+  }
+  return value;
+};
+
+/**
+ * Escape shell arguments
+ */
+const escapeShellArg = (arg) => {
+  if (os.platform() === 'win32') {
+    return `"${arg.replace(/"/g, '""')}"`;
+  } else {
+    return `'${arg.replace(/'/g, "'\\''")}'`;
+  }
+};
 
 // PostgreSQL binary path detection
 const getPgBinPath = () => {
@@ -73,8 +98,18 @@ const testConnection = async (config) => {
  * Create PostgreSQL backup using pg_dump
  */
 const createBackup = async (config, outputPath) => {
+  // Validate inputs to prevent command injection
+  const safeHost = validateInput(config.host, 'host', /^[a-zA-Z0-9\.\-]+$/);
+  const safeUsername = validateInput(config.username, 'username', /^[a-zA-Z0-9_\-@\.]+$/);
+  const safeDatabase = validateInput(config.database, 'database', /^[a-zA-Z0-9_\-]+$/);
+  const safePort = parseInt(config.port, 10);
+
+  if (isNaN(safePort) || safePort < 1 || safePort > 65535) {
+    throw new Error('Invalid port number');
+  }
+
   const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-  const fileName = `${config.database}_${timestamp}.sql`;
+  const fileName = `${safeDatabase}_${timestamp}.sql`;
   const filePath = path.join(outputPath, fileName);
 
   // Set environment variable for password
@@ -85,7 +120,7 @@ const createBackup = async (config, outputPath) => {
 
   // Build pg_dump command (without -C to avoid locale encoding issues)
   // We'll add CREATE DATABASE manually with safe UTF8 locale
-  const command = `"${PG_DUMP}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -F p --encoding=UTF8 -f "${filePath}"`;
+  const command = `"${PG_DUMP}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d ${safeDatabase} -F p --encoding=UTF8 -f "${filePath}"`;
 
   try {
     const startTime = Date.now();
@@ -101,11 +136,11 @@ const createBackup = async (config, outputPath) => {
 -- Database creation with UTF8 encoding (safe for all platforms)
 --
 
-CREATE DATABASE ${config.database} WITH ENCODING = 'UTF8' LC_COLLATE = 'C' LC_CTYPE = 'C' TEMPLATE = template0;
+CREATE DATABASE ${safeDatabase} WITH ENCODING = 'UTF8' LC_COLLATE = 'C' LC_CTYPE = 'C' TEMPLATE = template0;
 
-ALTER DATABASE ${config.database} OWNER TO ${config.username};
+ALTER DATABASE ${safeDatabase} OWNER TO ${safeUsername};
 
-\\connect ${config.database}
+\\connect ${safeDatabase}
 
 `;
     await fs.writeFile(filePath, createDbCommand + backupContent, 'utf8');
@@ -135,6 +170,21 @@ ALTER DATABASE ${config.database} OWNER TO ${config.username};
  * Restore PostgreSQL database from backup
  */
 const restoreBackup = async (config, backupFilePath) => {
+  // Validate inputs to prevent command injection
+  const safeHost = validateInput(config.host, 'host', /^[a-zA-Z0-9\.\-]+$/);
+  const safeUsername = validateInput(config.username, 'username', /^[a-zA-Z0-9_\-@\.]+$/);
+  const safeDatabase = validateInput(config.database, 'database', /^[a-zA-Z0-9_\-]+$/);
+  const safePort = parseInt(config.port, 10);
+
+  if (isNaN(safePort) || safePort < 1 || safePort > 65535) {
+    throw new Error('Invalid port number');
+  }
+
+  // Validate backup file path
+  if (!backupFilePath || !fsSync.existsSync(backupFilePath)) {
+    throw new Error('Invalid backup file path');
+  }
+
   const env = {
     ...process.env,
     PGPASSWORD: config.password,
@@ -143,8 +193,8 @@ const restoreBackup = async (config, backupFilePath) => {
   try {
     const startTime = Date.now();
 
-    // Check if database exists
-    const checkDbCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${config.database}'"`;
+    // Check if database exists (using parameterized query style - safe)
+    const checkDbCommand = `"${PSQL}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d postgres -tAc "SELECT 1 FROM pg_database WHERE datname='${safeDatabase}'"`;
 
     let databaseExists = false;
     try {
@@ -157,31 +207,31 @@ const restoreBackup = async (config, backupFilePath) => {
 
     if (databaseExists) {
       // Database exists - drop schema and restore (keeps connections alive)
-      const dropSchemaCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO ${config.username}; GRANT ALL ON SCHEMA public TO public;"`;
+      const dropSchemaCommand = `"${PSQL}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d ${safeDatabase} -c "DROP SCHEMA IF EXISTS public CASCADE; CREATE SCHEMA public; GRANT ALL ON SCHEMA public TO ${safeUsername}; GRANT ALL ON SCHEMA public TO public;"`;
 
       await execPromise(dropSchemaCommand, {
         env,
         maxBuffer: 1024 * 1024 * 500, // 500MB buffer for large databases
-        timeout: 30 * 60 * 1000 // 30 minutes timeout
+        timeout: 30 * 60 * 1000, // 30 minutes timeout
       });
 
       // Restore to existing database
-      const restoreCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d ${config.database} -f "${backupFilePath}"`;
+      const restoreCommand = `"${PSQL}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d ${safeDatabase} -f "${backupFilePath}"`;
 
       await execPromise(restoreCommand, {
         env,
         maxBuffer: 1024 * 1024 * 500,
-        timeout: 30 * 60 * 1000
+        timeout: 30 * 60 * 1000,
       });
     } else {
       // Database doesn't exist - restore to postgres database (backup contains CREATE DATABASE)
       // The -C flag in backup will create the database automatically
-      const restoreCommand = `"${PSQL}" -h ${config.host} -p ${config.port} -U ${config.username} -d postgres -f "${backupFilePath}"`;
+      const restoreCommand = `"${PSQL}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d postgres -f "${backupFilePath}"`;
 
       await execPromise(restoreCommand, {
         env,
         maxBuffer: 1024 * 1024 * 500,
-        timeout: 30 * 60 * 1000
+        timeout: 30 * 60 * 1000,
       });
     }
 
