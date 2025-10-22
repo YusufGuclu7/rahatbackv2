@@ -265,34 +265,36 @@ const executeBackup = async (backupJobId) => {
     // Upload to cloud storage if configured
     let cloudUploadResult = null;
     if (backupJob.cloudStorageId && (backupJob.storageType === 's3' || backupJob.storageType === 'google_drive')) {
-      try {
-        logger.info(`Uploading backup to cloud storage for job ${backupJobId}`);
-        const cloudStorage = await cloudStorageModel.findById(backupJob.cloudStorageId);
+      logger.info(`Uploading backup to cloud storage for job ${backupJobId}`);
+      const cloudStorage = await cloudStorageModel.findById(backupJob.cloudStorageId);
 
-        if (cloudStorage && cloudStorage.isActive) {
-          const cloudConnector = getCloudStorageConnector(cloudStorage.storageType);
-          cloudUploadResult = await cloudConnector.uploadBackup(cloudStorage, finalFilePath, finalFileName);
+      if (!cloudStorage) {
+        throw new Error('Cloud storage configuration not found');
+      }
 
-          if (cloudUploadResult.success) {
-            logger.info(`Successfully uploaded backup to ${cloudStorage.storageType}: ${cloudUploadResult.s3Key || cloudUploadResult.fileId}`);
+      if (!cloudStorage.isActive) {
+        throw new Error('Cloud storage configuration is not active');
+      }
 
-            // Update file path to cloud location
-            if (cloudStorage.storageType === 's3') {
-              finalFilePath = cloudUploadResult.url || cloudUploadResult.s3Key;
-            } else if (cloudStorage.storageType === 'google_drive') {
-              finalFilePath = cloudUploadResult.fileId;
-            }
+      const cloudConnector = getCloudStorageConnector(cloudStorage.storageType);
+      cloudUploadResult = await cloudConnector.uploadBackup(cloudStorage, finalFilePath, finalFileName);
 
-            // Optionally: Delete local file after cloud upload to save space
-            // Uncomment if you want to keep only cloud copies
-            // await fs.unlink(result.filePath);
-          } else {
-            logger.warn(`Cloud upload failed: ${cloudUploadResult.error}`);
-          }
+      if (cloudUploadResult.success) {
+        logger.info(`Successfully uploaded backup to ${cloudStorage.storageType}: ${cloudUploadResult.s3Key || cloudUploadResult.fileId}`);
+
+        // Update file path to cloud location
+        if (cloudStorage.storageType === 's3') {
+          finalFilePath = cloudUploadResult.url || cloudUploadResult.s3Key;
+        } else if (cloudStorage.storageType === 'google_drive') {
+          finalFilePath = cloudUploadResult.fileId;
         }
-      } catch (error) {
-        logger.error(`Cloud upload error: ${error.message}`);
-        // Don't fail the backup if cloud upload fails
+
+        // Optionally: Delete local file after cloud upload to save space
+        // Uncomment if you want to keep only cloud copies
+        // await fs.unlink(finalFilePath);
+      } else {
+        // Upload failed - throw error to mark backup as failed
+        throw new Error(`Cloud upload failed: ${cloudUploadResult.error}`);
       }
     }
 
