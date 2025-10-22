@@ -282,6 +282,9 @@ const executeBackup = async (backupJobId) => {
       if (cloudUploadResult.success) {
         logger.info(`Successfully uploaded backup to ${cloudStorage.storageType}: ${cloudUploadResult.s3Key || cloudUploadResult.fileId}`);
 
+        // Save local file path before updating to cloud location
+        const localFilePath = finalFilePath;
+
         // Update file path to cloud location
         if (cloudStorage.storageType === 's3') {
           finalFilePath = cloudUploadResult.url || cloudUploadResult.s3Key;
@@ -289,9 +292,14 @@ const executeBackup = async (backupJobId) => {
           finalFilePath = cloudUploadResult.fileId;
         }
 
-        // Optionally: Delete local file after cloud upload to save space
-        // Uncomment if you want to keep only cloud copies
-        // await fs.unlink(finalFilePath);
+        // Delete local file after successful cloud upload to save disk space
+        try {
+          await fs.unlink(localFilePath);
+          logger.info(`Deleted local backup file after cloud upload: ${localFilePath}`);
+        } catch (unlinkError) {
+          logger.warn(`Failed to delete local file after cloud upload: ${unlinkError.message}`);
+          // Don't fail the backup if local file deletion fails
+        }
       } else {
         // Upload failed - throw error to mark backup as failed
         throw new Error(`Cloud upload failed: ${cloudUploadResult.error}`);
