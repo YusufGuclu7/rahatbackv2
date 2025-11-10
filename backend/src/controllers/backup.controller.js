@@ -1,10 +1,19 @@
 const httpStatus = require('http-status');
 const catchAsync = require('../utils/catchAsync');
 const { backupService, scheduleService } = require('../services');
+const { hashPassword } = require('../utils/encryption');
 
 // Backup Jobs
 const createBackupJob = catchAsync(async (req, res) => {
-  const backupJob = await backupService.createBackupJob(req.user.id, req.body);
+  const jobData = { ...req.body };
+
+  // Hash encryption password if provided
+  if (jobData.isEncrypted && jobData.encryptionPassword) {
+    jobData.encryptionPasswordHash = hashPassword(jobData.encryptionPassword);
+    delete jobData.encryptionPassword; // Don't store plain password
+  }
+
+  const backupJob = await backupService.createBackupJob(req.user.id, jobData);
 
   // Start scheduled job if not manual
   if (backupJob.isActive && backupJob.scheduleType !== 'manual') {
@@ -29,7 +38,15 @@ const getBackupJob = catchAsync(async (req, res) => {
 });
 
 const updateBackupJob = catchAsync(async (req, res) => {
-  const backupJob = await backupService.updateBackupJob(parseInt(req.params.jobId), req.user.id, req.body);
+  const updateData = { ...req.body };
+
+  // Hash encryption password if provided
+  if (updateData.isEncrypted && updateData.encryptionPassword) {
+    updateData.encryptionPasswordHash = hashPassword(updateData.encryptionPassword);
+    delete updateData.encryptionPassword; // Don't store plain password
+  }
+
+  const backupJob = await backupService.updateBackupJob(parseInt(req.params.jobId), req.user.id, updateData);
 
   // Restart scheduled job with new settings
   await scheduleService.restartScheduledJob(backupJob.id);

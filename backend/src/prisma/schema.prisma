@@ -72,6 +72,8 @@ model BackupJob {
   cloudStorageId  Int?
   retentionDays   Int             @default(30)
   compression     Boolean         @default(true)
+  isEncrypted     Boolean         @default(false)
+  encryptionPasswordHash String?
   lastRunAt       DateTime?
   nextRunAt       DateTime?
   createdAt       DateTime        @default(now())
@@ -91,6 +93,7 @@ model BackupHistory {
   filePath     String
   duration     Int?
   errorMessage String?
+  isEncrypted  Boolean      @default(false)
   startedAt    DateTime     @default(now())
   completedAt  DateTime?
   backupJob    BackupJob?   @relation(fields: [backupJobId], references: [id])

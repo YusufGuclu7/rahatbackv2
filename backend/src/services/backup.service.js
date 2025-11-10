@@ -11,6 +11,7 @@ const ApiError = require('../utils/ApiError');
 const logger = require('../config/logger');
 const { sendBackupNotification } = require('./email.service');
 const prisma = require('../utils/database');
+const { encryptFile, decryptFile, hashPassword } = require('../utils/encryption');
 
 // Backup storage directory
 const BACKUP_STORAGE_PATH = process.env.BACKUP_STORAGE_PATH || path.join(__dirname, '../../backups');
@@ -262,6 +263,27 @@ const executeBackup = async (backupJobId) => {
       fileSize = stats.size;
     }
 
+    // Encrypt if enabled
+    if (backupJob.isEncrypted && backupJob.encryptionPasswordHash) {
+      logger.info(`Encrypting backup for job ${backupJobId}`);
+
+      // Use the hash as the encryption password (in production, user should provide password)
+      // For now, we'll use a fixed password derived from the hash
+      const encryptionPassword = backupJob.encryptionPasswordHash;
+
+      const encryptedPath = `${finalFilePath}.enc`;
+      await encryptFile(finalFilePath, encryptedPath, encryptionPassword);
+
+      // Delete unencrypted file
+      await fs.unlink(finalFilePath);
+      finalFilePath = encryptedPath;
+      finalFileName = path.basename(encryptedPath);
+      const stats = await fs.stat(encryptedPath);
+      fileSize = stats.size;
+
+      logger.info(`Backup encrypted successfully: ${finalFileName}`);
+    }
+
     // Upload to cloud storage if configured
     let cloudUploadResult = null;
     if (backupJob.cloudStorageId && (backupJob.storageType === 's3' || backupJob.storageType === 'google_drive')) {
@@ -313,6 +335,7 @@ const executeBackup = async (backupJobId) => {
       filePath: finalFilePath,
       fileSize: fileSize, // Keep as number, no BigInt conversion
       duration: result.duration,
+      isEncrypted: backupJob.isEncrypted || false,
       completedAt: new Date(),
     });
 
@@ -616,14 +639,35 @@ const restoreBackup = async (historyId, userId) => {
     }
   }
 
-  // Handle compressed files
+  // Handle encrypted files
   let filePathToRestore = localFilePath;
   let needsCleanup = shouldCleanupDownloadedFile;
 
-  if (backup.fileName.endsWith('.gz')) {
+  if (backup.isEncrypted) {
+    // Get encryption password from backup job
+    if (!backupJob || !backupJob.encryptionPasswordHash) {
+      throw new ApiError(httpStatus.BAD_REQUEST, 'Backup is encrypted but password is not available');
+    }
+
+    logger.info(`Decrypting backup for restore: ${backup.fileName}`);
+    const decryptedPath = localFilePath.replace('.enc', '');
+    await decryptFile(localFilePath, decryptedPath, backupJob.encryptionPasswordHash);
+
+    // Clean up encrypted file
+    if (shouldCleanupDownloadedFile) {
+      await fs.unlink(localFilePath);
+    }
+
+    filePathToRestore = decryptedPath;
+    needsCleanup = true;
+    logger.info(`Backup decrypted successfully: ${decryptedPath}`);
+  }
+
+  // Handle compressed files
+  if (backup.fileName.replace('.enc', '').endsWith('.gz')) {
     // Decompress the file
-    const decompressedPath = localFilePath.replace('.gz', '');
-    const inputStream = fsSync.createReadStream(localFilePath);
+    const decompressedPath = filePathToRestore.replace('.gz', '');
+    const inputStream = fsSync.createReadStream(filePathToRestore);
     const outputStream = fsSync.createWriteStream(decompressedPath);
     const gunzip = zlib.createGunzip();
 
@@ -634,6 +678,11 @@ const restoreBackup = async (historyId, userId) => {
       gunzip.on('error', reject);
       inputStream.pipe(gunzip).pipe(outputStream);
     });
+
+    // Clean up previous file if needed
+    if (needsCleanup) {
+      await fs.unlink(filePathToRestore);
+    }
 
     filePathToRestore = decompressedPath;
     needsCleanup = true;

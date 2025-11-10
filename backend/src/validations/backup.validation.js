@@ -57,6 +57,19 @@ const createBackupJob = {
       'number.max': 'Retention days cannot exceed 3650 (10 years)',
     }),
     compression: Joi.boolean().default(true),
+    isEncrypted: Joi.boolean().default(false),
+    encryptionPassword: Joi.string()
+      .min(8)
+      .max(128)
+      .when('isEncrypted', {
+        is: true,
+        then: Joi.required().messages({
+          'any.required': 'Encryption password is required when encryption is enabled',
+          'string.min': 'Encryption password must be at least 8 characters long',
+          'string.max': 'Encryption password cannot exceed 128 characters',
+        }),
+        otherwise: Joi.optional().allow('', null),
+      }),
     isActive: Joi.boolean().default(true),
   }),
 };
@@ -89,6 +102,19 @@ const updateBackupJob = {
       cloudStorageId: Joi.number().integer().allow(null),
       retentionDays: Joi.number().integer().min(1).max(3650),
       compression: Joi.boolean(),
+      isEncrypted: Joi.boolean(),
+      encryptionPassword: Joi.string()
+        .min(8)
+        .max(128)
+        .when('isEncrypted', {
+          is: true,
+          then: Joi.required().messages({
+            'any.required': 'Encryption password is required when encryption is enabled',
+            'string.min': 'Encryption password must be at least 8 characters long',
+            'string.max': 'Encryption password cannot exceed 128 characters',
+          }),
+          otherwise: Joi.optional().allow('', null),
+        }),
       isActive: Joi.boolean(),
     })
     .min(1),
