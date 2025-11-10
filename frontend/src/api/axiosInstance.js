@@ -12,7 +12,12 @@ const axiosInstance = axios.create({
 axiosInstance.interceptors.request.use(
   async (config) => {
     console.log("Request config:", config.url);
-    if (!config.url.includes('/auth/')) {
+
+    // Token gerektirmeyen endpoint'ler (login, register vb.)
+    const publicEndpoints = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password'];
+    const isPublicEndpoint = publicEndpoints.some(endpoint => config.url.includes(endpoint));
+
+    if (!isPublicEndpoint) {
       const token = await CheckToken();
       if (!token) {
         window.location.href = "/login";
@@ -20,9 +25,9 @@ axiosInstance.interceptors.request.use(
       }
 
       config.headers.Authorization = `Bearer ${token}`;
-      return config;
     }
-    logout();
+
+    return config;
   },
   (error) => {
     return Promise.reject(error);

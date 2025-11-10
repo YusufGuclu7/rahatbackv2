@@ -49,6 +49,20 @@ const verifyEmail = {
   }),
 };
 
+const verify2FAToken = {
+  body: Joi.object().keys({
+    token: Joi.string().required().length(6).pattern(/^[0-9]+$/),
+  }),
+};
+
+const loginWith2FA = {
+  body: Joi.object().keys({
+    email: Joi.string().required().email(),
+    password: Joi.string().required(),
+    token: Joi.string().required().length(6).pattern(/^[0-9]+$/),
+  }),
+};
+
 module.exports = {
   register,
   login,
@@ -57,4 +71,6 @@ module.exports = {
   forgotPassword,
   resetPassword,
   verifyEmail,
+  verify2FAToken,
+  loginWith2FA,
 };

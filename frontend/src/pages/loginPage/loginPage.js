@@ -14,6 +14,10 @@ import {
   Box,
   CircularProgress,
   FormControlLabel,
+  Dialog,
+  DialogTitle,
+  DialogContent,
+  DialogActions,
 } from "@mui/material";
 import smallLogo from "../../assets/images/rahatsistem-logo.png";
 import { useNavigate } from "react-router-dom";
@@ -24,6 +28,7 @@ import {
   VisibilityOff,
 } from "@mui/icons-material";
 import { login } from "../../api/auth/login";
+import { loginWith2FA } from "../../api/auth/twoFactor";
 import { emailFormatControl } from "../../utils/emailFormatControl";
 
 const Login = () => {
@@ -40,6 +45,10 @@ const Login = () => {
   const [helperEmailText, setHelperEmailText] = useState("");
   const [helperText, setHelperText] = useState("");
   const [error, setError] = useState(false);
+
+  // 2FA states
+  const [show2FAModal, setShow2FAModal] = useState(false);
+  const [twoFactorToken, setTwoFactorToken] = useState("");
 
   const loginButtonRef = useRef(null); //TODO ENTER KOMUTU İÇİN
 
@@ -63,9 +72,19 @@ const Login = () => {
 
   const handleLogin = (event) => {
     console.log('Login button clicked');
+    setIsLoading(true);
     login(email, password)
       .then((resp) => {
         console.log('Login response:', resp.data);
+
+        // Check if 2FA is required
+        if (resp.data.requires2FA) {
+          setIsLoading(false);
+          setShow2FAModal(true);
+          return;
+        }
+
+        // Normal login flow
         cookies.set("jwt-access", resp.data.tokens.access.token, { path: '/' });
         cookies.set("jwt-access-expires", resp.data.tokens.access.expires, { path: '/' });
         cookies.set("jwt-refresh", resp.data.tokens.refresh.token, { path: '/' });
@@ -80,6 +99,7 @@ const Login = () => {
         const role = decodedToken.role;
         console.log('User role:', role);
 
+        setIsLoading(false);
         if (role === "user") {
           navigate("/homepage");
         } else if (role === "admin") {
@@ -89,8 +109,44 @@ const Login = () => {
       })
       .catch((err) => {
         console.error('Login error:', err);
+        setIsLoading(false);
         Swal.fire({
           title: err?.response?.data?.message || "Giriş başarısız",
+          icon: "error",
+          confirmButtonText: "Tamam",
+        });
+      });
+  };
+
+  const handle2FASubmit = () => {
+    setIsLoading(true);
+    loginWith2FA(email, password, twoFactorToken)
+      .then((resp) => {
+        console.log('2FA Login response:', resp.data);
+
+        cookies.set("jwt-access", resp.data.tokens.access.token, { path: '/' });
+        cookies.set("jwt-access-expires", resp.data.tokens.access.expires, { path: '/' });
+        cookies.set("jwt-refresh", resp.data.tokens.refresh.token, { path: '/' });
+        cookies.set("jwt-refresh-expires", resp.data.tokens.refresh.expires, { path: '/' });
+
+        const decodedToken = jwtDecode(resp.data.tokens.access.token);
+        const role = decodedToken.role;
+
+        setIsLoading(false);
+        setShow2FAModal(false);
+        setTwoFactorToken("");
+
+        if (role === "user") {
+          navigate("/homepage");
+        } else if (role === "admin") {
+          navigate("/homepage");
+        }
+      })
+      .catch((err) => {
+        console.error('2FA Login error:', err);
+        setIsLoading(false);
+        Swal.fire({
+          title: err?.response?.data?.message || "2FA doğrulama başarısız",
           icon: "error",
           confirmButtonText: "Tamam",
         });
@@ -368,6 +424,75 @@ const Login = () => {
           </Button>
         </Grid>
       </Grid>
+
+      {/* 2FA Modal */}
+      <Dialog
+        open={show2FAModal}
+        onClose={() => setShow2FAModal(false)}
+        maxWidth="xs"
+        fullWidth
+      >
+        <DialogTitle>
+          <Typography variant="h5" align="center">
+            İki Faktörlü Doğrulama
+          </Typography>
+        </DialogTitle>
+        <DialogContent>
+          <Box sx={{ pt: 2 }}>
+            <Typography variant="body2" color="textSecondary" align="center" sx={{ mb: 3 }}>
+              Lütfen authenticator uygulamanızdan 6 haneli kodu girin
+            </Typography>
+            <TextField
+              fullWidth
+              variant="outlined"
+              label="6 Haneli Kod"
+              value={twoFactorToken}
+              onChange={(e) => {
+                const value = e.target.value.replace(/[^0-9]/g, '');
+                if (value.length <= 6) {
+                  setTwoFactorToken(value);
+                }
+              }}
+              inputProps={{
+                maxLength: 6,
+                style: { textAlign: 'center', fontSize: '24px', letterSpacing: '8px' }
+              }}
+              autoFocus
+              onKeyPress={(e) => {
+                if (e.key === 'Enter' && twoFactorToken.length === 6) {
+                  handle2FASubmit();
+                }
+              }}
+            />
+          </Box>
+        </DialogContent>
+        <DialogActions sx={{ p: 3, pt: 1 }}>
+          <Button
+            onClick={() => {
+              setShow2FAModal(false);
+              setTwoFactorToken("");
+            }}
+            variant="outlined"
+            fullWidth
+          >
+            İptal
+          </Button>
+          <Button
+            onClick={handle2FASubmit}
+            variant="contained"
+            fullWidth
+            disabled={twoFactorToken.length !== 6 || isLoading}
+            sx={{
+              backgroundColor: "#3f51b5",
+              "&:hover": {
+                backgroundColor: "#303f9f",
+              },
+            }}
+          >
+            {isLoading ? <CircularProgress size={24} sx={{ color: "#fff" }} /> : "Doğrula"}
+          </Button>
+        </DialogActions>
+      </Dialog>
     </Grid>
   );
 };

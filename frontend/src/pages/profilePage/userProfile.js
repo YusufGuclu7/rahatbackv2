@@ -15,10 +15,12 @@ import LocationOnIcon from "@mui/icons-material/LocationOn";
 import CalendarTodayIcon from "@mui/icons-material/CalendarToday";
 import BadgeOutlinedIcon from "@mui/icons-material/BadgeOutlined";
 import ManageAccountsOutlinedIcon from "@mui/icons-material/ManageAccountsOutlined";
+import SecurityIcon from "@mui/icons-material/Security";
 import localStorage from "local-storage";
 import Sidebar from "../../components/sideBar/sideBar";
 import UserInfo from "./userProfileInfoPage.js";
 import UserSetting from "./userProfileSettingsPage.js";
+import TwoFactorAuthPage from "./TwoFactorAuthPage.js";
 
 const ProfilePage = () => {
   const [userInfo, setUserInfo] = useState({
@@ -180,6 +182,17 @@ const ProfilePage = () => {
                   Ayarlar
                 </Button>
               </Grid>
+              <Grid item xs={6} sm={2}>
+                <Button
+                  fullWidth
+                  variant={selectedButtonId === 3 ? "contained" : "text"}
+                  sx={{ display: "flex", gap: 1 }}
+                  onClick={() => handleButtonClick(3)}
+                >
+                  <SecurityIcon fontSize="medium" />
+                  Güvenlik
+                </Button>
+              </Grid>
             </Grid>
           </Grid>
 
@@ -187,8 +200,10 @@ const ProfilePage = () => {
           <Grid item xs={12}>
             {selectedButtonId === 1 ? (
               <UserInfo userInfo={userInfo} />
-            ) : (
+            ) : selectedButtonId === 2 ? (
               <UserSetting userInfo={userInfo} />
+            ) : (
+              <TwoFactorAuthPage />
             )}
           </Grid>
         </Grid>

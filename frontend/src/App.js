@@ -21,6 +21,7 @@ import BackupJobsList from "./pages/backupJobs/BackupJobsList.js";
 import BackupHistoryList from "./pages/backupHistory/BackupHistoryList.js";
 import Dashboard from "./pages/dashboard/Dashboard.js";
 import EmailNotificationSettings from "./pages/notifications/EmailNotificationSettings.js";
+import TwoFactorAuthPage from "./pages/profilePage/TwoFactorAuthPage.js";
 import "./App.css";
 import { jwtDecode } from "jwt-decode";
 
@@ -122,6 +123,7 @@ function AppRoutes() {
         <Route path="homepage" element={<HomePage />} />
         <Route path="dashboard" element={<Dashboard />} />
         <Route path="user/profile" element={<ProfilePage />} />
+        <Route path="user/security" element={<TwoFactorAuthPage />} />
         <Route path="databases" element={<DatabaseList />} />
         <Route path="cloud-storage" element={<CloudStorageList />} />
         <Route path="backup-jobs" element={<BackupJobsList />} />

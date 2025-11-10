@@ -15,6 +15,14 @@ router.post('/reset-password', validate(authValidation.resetPassword), authContr
 router.post('/send-verification-email', auth(), authController.sendVerificationEmail);
 router.post('/verify-email', validate(authValidation.verifyEmail), authController.verifyEmail);
 
+// 2FA routes
+router.post('/2fa/generate', auth(), authController.generate2FA);
+router.post('/2fa/enable', auth(), validate(authValidation.verify2FAToken), authController.enable2FA);
+router.post('/2fa/verify', auth(), validate(authValidation.verify2FAToken), authController.verify2FA);
+router.post('/2fa/disable', auth(), validate(authValidation.verify2FAToken), authController.disable2FA);
+router.get('/2fa/status', auth(), authController.get2FAStatus);
+router.post('/login-2fa', validate(authValidation.loginWith2FA), authController.loginWith2FA);
+
 module.exports = router;
 
 /**
