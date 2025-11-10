@@ -6,3 +6,4 @@ module.exports.databaseService = require('./database.service');
 module.exports.backupService = require('./backup.service');
 module.exports.scheduleService = require('./schedule.service');
 module.exports.cloudStorageService = require('./cloudStorage.service');
+module.exports.auditLogService = require('./auditLog.service');

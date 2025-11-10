@@ -9,6 +9,7 @@ const config = require('./config/config');
 const morgan = require('./config/morgan');
 const { jwtStrategy } = require('./config/passport');
 const { authLimiter } = require('./middlewares/rateLimiter');
+const auditLogger = require('./middlewares/auditLogger');
 const routes = require('./routes/v1');
 const { errorConverter, errorHandler } = require('./middlewares/error');
 const ApiError = require('./utils/ApiError');
@@ -46,6 +47,9 @@ app.options('*', cors());
 // jwt authentication
 app.use(passport.initialize());
 passport.use('jwt', jwtStrategy);
+
+// audit logging middleware - logs all important actions
+app.use(auditLogger());
 
 // limit repeated failed requests to auth endpoints
 if (config.env === 'production') {

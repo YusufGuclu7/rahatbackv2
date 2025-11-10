@@ -22,6 +22,7 @@ model User {
   Token                  Token[]
   NotificationSettings   NotificationSettings?
   CloudStorage           CloudStorage[]
+  AuditLog               AuditLog[]
 }
 
 model Token {
@@ -178,4 +179,74 @@ enum BackupStatus {
   success
   failed
   cancelled
+}
+
+enum AuditAction {
+  // Authentication
+  LOGIN
+  LOGOUT
+  REGISTER
+  PASSWORD_RESET
+  PASSWORD_CHANGE
+  TWO_FACTOR_ENABLE
+  TWO_FACTOR_DISABLE
+
+  // Database
+  DATABASE_CREATE
+  DATABASE_UPDATE
+  DATABASE_DELETE
+  DATABASE_TEST
+
+  // Backup Jobs
+  BACKUP_JOB_CREATE
+  BACKUP_JOB_UPDATE
+  BACKUP_JOB_DELETE
+  BACKUP_JOB_RUN
+
+  // Backup History
+  BACKUP_START
+  BACKUP_SUCCESS
+  BACKUP_FAIL
+  BACKUP_DELETE
+  BACKUP_DOWNLOAD
+  BACKUP_RESTORE
+
+  // Cloud Storage
+  CLOUD_STORAGE_CREATE
+  CLOUD_STORAGE_UPDATE
+  CLOUD_STORAGE_DELETE
+  CLOUD_STORAGE_TEST
+
+  // Notifications
+  NOTIFICATION_UPDATE
+  NOTIFICATION_TEST
+
+  // Users (Admin)
+  USER_CREATE
+  USER_UPDATE
+  USER_DELETE
+
+  // Settings
+  SETTINGS_UPDATE
+}
+
+model AuditLog {
+  id          Int          @id @default(autoincrement())
+  userId      Int?
+  action      AuditAction
+  resource    String?      // e.g., "database", "backup_job", "cloud_storage"
+  resourceId  Int?         // ID of the resource affected
+  details     String?      @db.Text // JSON string with additional details
+  ipAddress   String?
+  userAgent   String?
+  status      String       @default("success") // success, failed
+  errorMessage String?     @db.Text
+  createdAt   DateTime     @default(now())
+
+  user        User?        @relation(fields: [userId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([action])
+  @@index([createdAt])
+  @@index([resource, resourceId])
 }
