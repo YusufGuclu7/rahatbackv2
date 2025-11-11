@@ -14,7 +14,7 @@ axiosInstance.interceptors.request.use(
     console.log("Request config:", config.url);
 
     // Token gerektirmeyen endpoint'ler (login, register vb.)
-    const publicEndpoints = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password'];
+    const publicEndpoints = ['/auth/login', '/auth/register', '/auth/forgot-password', '/auth/reset-password', '/auth/refresh-token'];
     const isPublicEndpoint = publicEndpoints.some(endpoint => config.url.includes(endpoint));
 
     if (!isPublicEndpoint) {
