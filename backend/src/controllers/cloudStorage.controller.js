@@ -19,9 +19,13 @@ const getCloudStorages = catchAsync(async (req, res) => {
     storageType: req.query.storageType,
   };
 
-  // Convert isActive string to boolean
+  // Convert isActive to boolean (handle both string and boolean input)
   if (req.query.isActive !== undefined) {
-    filters.isActive = req.query.isActive === 'true';
+    if (typeof req.query.isActive === 'boolean') {
+      filters.isActive = req.query.isActive;
+    } else {
+      filters.isActive = req.query.isActive === 'true';
+    }
   }
 
   const cloudStorages = await cloudStorageService.getUserCloudStorages(req.user.id, filters);

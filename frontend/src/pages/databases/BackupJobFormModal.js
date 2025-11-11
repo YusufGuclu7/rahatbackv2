@@ -66,7 +66,6 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
   const loadCloudStorages = async () => {
     try {
       const data = await cloudStorageApi.getCloudStorages({ isActive: true });
-      console.log('Loaded cloud storages:', data); // DEBUG
       setCloudStorages(data);
     } catch (error) {
       console.error('Cloud storage listesi yüklenemedi:', error);

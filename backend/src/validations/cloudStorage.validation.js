@@ -101,24 +101,30 @@ const updateCloudStorage = {
         .min(2)
         .max(100)
         .pattern(/^[a-zA-Z0-9\s\-_]+$/),
+      storageType: Joi.string()
+        .valid('local', 's3', 'google_drive', 'ftp', 'azure')
+        .messages({
+          'any.only': 'Storage type must be one of: local, s3, google_drive, ftp, azure',
+        }),
       isActive: Joi.boolean(),
       isDefault: Joi.boolean(),
 
       // AWS S3 Configuration
-      s3Region: Joi.string().min(2).max(50),
+      s3Region: Joi.string().min(2).max(50).allow(null, ''),
       s3Bucket: Joi.string()
         .min(3)
         .max(63)
-        .pattern(/^[a-z0-9][a-z0-9\-]*[a-z0-9]$/),
-      s3AccessKeyId: Joi.string().min(16).max(128),
-      s3SecretAccessKey: Joi.string().min(40).max(128),
+        .pattern(/^[a-z0-9][a-z0-9\-]*[a-z0-9]$/)
+        .allow(null, ''),
+      s3AccessKeyId: Joi.string().min(16).max(128).allow(null, ''),
+      s3SecretAccessKey: Joi.string().min(40).max(128).allow(null, ''),
       s3Endpoint: Joi.string()
         .allow(null, '')
         .uri()
         .pattern(/^https?:\/\//),
 
       // Google Drive Configuration
-      gdRefreshToken: Joi.string().min(20),
+      gdRefreshToken: Joi.string().min(20).allow(null, ''),
       gdFolderId: Joi.string()
         .allow(null, '')
         .min(10)
@@ -160,7 +166,10 @@ const listFiles = {
 const getCloudStorages = {
   query: Joi.object().keys({
     storageType: Joi.string().valid('local', 's3', 'google_drive', 'ftp', 'azure'),
-    isActive: Joi.boolean(),
+    isActive: Joi.alternatives().try(
+      Joi.boolean(),
+      Joi.string().valid('true', 'false')
+    ),
   }),
 };
 
