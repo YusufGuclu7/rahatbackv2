@@ -32,6 +32,7 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
     cloudStorageId: null,
     retentionDays: 30,
     compression: true,
+    backupType: 'full',
     isActive: true,
   });
 
@@ -51,6 +52,7 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
         cloudStorageId: null,
         retentionDays: 30,
         compression: true,
+        backupType: 'full',
         isActive: true,
       });
 
@@ -267,6 +269,32 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
             inputProps={{ min: 1, max: 365 }}
             helperText="Yedekler kaç gün saklanacak?"
           />
+
+          <Divider />
+
+          {/* Backup Type */}
+          <Typography variant="subtitle1" fontWeight="bold">
+            Yedekleme Tipi
+          </Typography>
+
+          <FormControl fullWidth>
+            <InputLabel>Yedekleme Tipi</InputLabel>
+            <Select
+              value={formData.backupType}
+              onChange={(e) => handleChange('backupType', e.target.value)}
+              label="Yedekleme Tipi"
+            >
+              <MenuItem value="full">Full Backup (Tam Yedekleme)</MenuItem>
+              <MenuItem value="incremental">Incremental Backup (Artırımlı)</MenuItem>
+              <MenuItem value="differential">Differential Backup (Fark Yedekleme)</MenuItem>
+            </Select>
+          </FormControl>
+
+          <Alert severity="info" sx={{ mt: 1 }}>
+            {formData.backupType === 'full' && 'Tüm veritabanı yedeklenir. En güvenli ama en fazla yer kaplar.'}
+            {formData.backupType === 'incremental' && 'Sadece son yedekten sonra değişen veriler yedeklenir. Daha hızlı ve az yer kaplar.'}
+            {formData.backupType === 'differential' && 'Son tam yedekten sonra değişen tüm veriler yedeklenir.'}
+          </Alert>
 
           <Divider />
 

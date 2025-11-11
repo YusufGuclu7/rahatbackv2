@@ -74,6 +74,11 @@ model BackupJob {
   compression     Boolean         @default(true)
   isEncrypted     Boolean         @default(false)
   encryptionPasswordHash String?
+
+  // Incremental backup fields
+  backupType       BackupType      @default(full)
+  lastFullBackupAt DateTime?
+
   lastRunAt       DateTime?
   nextRunAt       DateTime?
   createdAt       DateTime        @default(now())
@@ -88,6 +93,8 @@ model BackupHistory {
   backupJobId  Int?
   databaseId   Int
   status       BackupStatus
+  backupType   BackupType   @default(full)
+  baseBackupId Int?         // For incremental: reference to the base full backup
   fileName     String
   fileSize     BigInt?
   filePath     String
@@ -98,6 +105,9 @@ model BackupHistory {
   completedAt  DateTime?
   backupJob    BackupJob?   @relation(fields: [backupJobId], references: [id])
   database     Database     @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+
+  @@index([backupType])
+  @@index([baseBackupId])
 }
 
 model NotificationSettings {
@@ -184,6 +194,12 @@ enum BackupStatus {
   success
   failed
   cancelled
+}
+
+enum BackupType {
+  full
+  incremental
+  differential
 }
 
 enum AuditAction {

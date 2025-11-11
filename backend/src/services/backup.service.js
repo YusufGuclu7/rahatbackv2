@@ -239,9 +239,30 @@ const executeBackup = async (backupJobId) => {
     // Get appropriate connector
     const connector = getConnector(dbConfig.type);
 
-    // Execute backup
-    logger.info(`Starting backup for job ${backupJobId}, database ${dbConfig.name}`);
-    const result = await connector.createBackup(dbConfig, jobBackupPath);
+    // Determine backup type and execute
+    let result;
+    const backupType = backupJob.backupType || 'full';
+
+    if (backupType === 'incremental' && connector.createIncrementalBackup) {
+      // Execute incremental backup
+      logger.info(`Starting INCREMENTAL backup for job ${backupJobId}, database ${dbConfig.name}`);
+      const lastFullBackupDate = backupJob.lastFullBackupAt;
+      result = await connector.createIncrementalBackup(dbConfig, jobBackupPath, lastFullBackupDate);
+    } else if (backupType === 'differential' && connector.createIncrementalBackup) {
+      // For differential, use incremental backup with lastFullBackupAt
+      logger.info(`Starting DIFFERENTIAL backup for job ${backupJobId}, database ${dbConfig.name}`);
+      const lastFullBackupDate = backupJob.lastFullBackupAt;
+      result = await connector.createIncrementalBackup(dbConfig, jobBackupPath, lastFullBackupDate);
+    } else {
+      // Execute full backup
+      logger.info(`Starting FULL backup for job ${backupJobId}, database ${dbConfig.name}`);
+      result = await connector.createBackup(dbConfig, jobBackupPath);
+
+      // Update lastFullBackupAt for full backups
+      await backupJobModel.update(backupJobId, {
+        lastFullBackupAt: new Date(),
+      });
+    }
 
     if (!result.success) {
       throw new Error(result.error);
@@ -331,6 +352,7 @@ const executeBackup = async (backupJobId) => {
     // Update backup history with success
     await backupHistoryModel.update(backupHistory.id, {
       status: 'success',
+      backupType: backupType,
       fileName: finalFileName,
       filePath: finalFilePath,
       fileSize: fileSize, // Keep as number, no BigInt conversion

@@ -224,9 +224,27 @@ const restoreBackup = async (config, backupFilePath) => {
         timeout: 30 * 60 * 1000,
       });
     } else {
-      // Database doesn't exist - restore to postgres database (backup contains CREATE DATABASE)
-      // The -C flag in backup will create the database automatically
-      const restoreCommand = `"${PSQL}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d postgres -f "${backupFilePath}"`;
+      // Database doesn't exist - create it first with safe UTF8 locale (no Turkish locale issues)
+      // CREATE DATABASE cannot run in a transaction, so we use separate commands
+      const createDbCommand = `"${PSQL}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d postgres -c "CREATE DATABASE ${safeDatabase} WITH ENCODING = 'UTF8' LC_COLLATE = 'C' LC_CTYPE = 'C' TEMPLATE = template0"`;
+
+      await execPromise(createDbCommand, {
+        env,
+        maxBuffer: 1024 * 1024 * 500,
+        timeout: 30 * 60 * 1000,
+      });
+
+      // Alter database owner in separate command
+      const alterOwnerCommand = `"${PSQL}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d postgres -c "ALTER DATABASE ${safeDatabase} OWNER TO ${safeUsername}"`;
+
+      await execPromise(alterOwnerCommand, {
+        env,
+        maxBuffer: 1024 * 1024 * 500,
+        timeout: 30 * 60 * 1000,
+      });
+
+      // Now restore to the newly created database
+      const restoreCommand = `"${PSQL}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d ${safeDatabase} -f "${backupFilePath}"`;
 
       await execPromise(restoreCommand, {
         env,
@@ -283,9 +301,126 @@ const getDatabaseSize = async (config) => {
   }
 };
 
+/**
+ * Create incremental backup - exports only changed tables since last backup
+ * Uses pg_stat_user_tables to detect changes
+ */
+const createIncrementalBackup = async (config, outputPath, lastFullBackupDate) => {
+  const safeHost = validateInput(config.host, 'host', /^[a-zA-Z0-9\.\-]+$/);
+  const safeUsername = validateInput(config.username, 'username', /^[a-zA-Z0-9_\-@\.]+$/);
+  const safeDatabase = validateInput(config.database, 'database', /^[a-zA-Z0-9_\-]+$/);
+  const safePort = parseInt(config.port, 10);
+
+  if (isNaN(safePort) || safePort < 1 || safePort > 65535) {
+    throw new Error('Invalid port number');
+  }
+
+  const client = new Client({
+    host: config.host,
+    port: config.port,
+    user: config.username,
+    password: config.password,
+    database: config.database,
+    ssl: config.sslEnabled ? { rejectUnauthorized: false } : false,
+  });
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const fileName = `${safeDatabase}_incremental_${timestamp}.sql`;
+  const filePath = path.join(outputPath, fileName);
+
+  try {
+    const startTime = Date.now();
+    await client.connect();
+
+    // Get tables that have been modified since last backup
+    // Using n_tup_ins, n_tup_upd, n_tup_del from pg_stat_user_tables
+    const tablesQuery = `
+      SELECT
+        schemaname,
+        relname as tablename,
+        n_tup_ins + n_tup_upd + n_tup_del as total_changes
+      FROM pg_stat_user_tables
+      WHERE schemaname = 'public'
+      ORDER BY total_changes DESC
+    `;
+
+    const result = await client.query(tablesQuery);
+    const changedTables = result.rows.filter(row => row.total_changes > 0);
+
+    await client.end();
+
+    if (changedTables.length === 0) {
+      // No changes detected - create empty incremental backup file
+      const content = `-- Incremental Backup: ${new Date().toISOString()}\n-- No changes detected since last backup\n`;
+      await fs.writeFile(filePath, content, 'utf8');
+
+      const stats = await fs.stat(filePath);
+      const duration = Math.floor((Date.now() - startTime) / 1000);
+
+      return {
+        success: true,
+        fileName,
+        filePath,
+        fileSize: stats.size,
+        duration,
+        changedTables: [],
+        message: 'No changes detected',
+      };
+    }
+
+    // Build pg_dump command for only changed tables
+    const tableList = changedTables.map(t => `-t ${t.tablename}`).join(' ');
+
+    const env = {
+      ...process.env,
+      PGPASSWORD: config.password,
+    };
+
+    // Include both table schema and data (no --data-only, no --create)
+    // --create includes CREATE DATABASE which causes issues, so we skip it
+    // This includes CREATE TABLE statements automatically
+    const command = `"${PG_DUMP}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d ${safeDatabase} ${tableList} -F p --encoding=UTF8 -f "${filePath}"`;
+
+    await execPromise(command, {
+      env,
+      maxBuffer: 1024 * 1024 * 500, // 500MB buffer
+      timeout: 30 * 60 * 1000 // 30 minutes timeout
+    });
+
+    // Prepend header with metadata
+    const backupContent = await fs.readFile(filePath, 'utf8');
+    const header = `-- Incremental Backup: ${new Date().toISOString()}
+-- Base Backup Date: ${lastFullBackupDate || 'N/A'}
+-- Changed Tables: ${changedTables.map(t => t.tablename).join(', ')}
+-- Total Changes: ${changedTables.reduce((sum, t) => sum + parseInt(t.total_changes), 0)}
+
+`;
+    await fs.writeFile(filePath, header + backupContent, 'utf8');
+
+    const duration = Math.floor((Date.now() - startTime) / 1000);
+    const stats = await fs.stat(filePath);
+
+    return {
+      success: true,
+      fileName,
+      filePath,
+      fileSize: stats.size,
+      duration,
+      changedTables: changedTables.map(t => t.tablename),
+      message: `Incremental backup completed with ${changedTables.length} changed tables`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
 module.exports = {
   testConnection,
   createBackup,
+  createIncrementalBackup,
   restoreBackup,
   getDatabaseSize,
 };

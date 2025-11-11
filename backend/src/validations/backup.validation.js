@@ -70,6 +70,13 @@ const createBackupJob = {
         }),
         otherwise: Joi.optional().allow('', null),
       }),
+    backupType: Joi.string()
+      .optional()
+      .valid('full', 'incremental', 'differential')
+      .default('full')
+      .messages({
+        'any.only': 'Backup type must be one of: full, incremental, differential',
+      }),
     isActive: Joi.boolean().default(true),
   }),
 };
@@ -115,6 +122,7 @@ const updateBackupJob = {
           }),
           otherwise: Joi.optional().allow('', null),
         }),
+      backupType: Joi.string().valid('full', 'incremental', 'differential'),
       isActive: Joi.boolean(),
     })
     .min(1),

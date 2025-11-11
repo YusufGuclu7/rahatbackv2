@@ -153,15 +153,38 @@ const restoreBackup = async (config, backupFilePath) => {
   try {
     const startTime = Date.now();
 
-    // Drop all existing tables (preserves database structure, doesn't disconnect users)
+    // Check if database exists
+    const checkDbCommand = `mysql -h ${safeHost} -P ${safePort} -u ${escapeShellArg(safeUsername)} -e "SHOW DATABASES LIKE '${safeDatabase}';"`;
+
+    let databaseExists = false;
     try {
-      await execPromise(dropTablesCommand, {
+      const result = await execPromise(checkDbCommand, { env, timeout: 10000 });
+      databaseExists = result.stdout.includes(safeDatabase);
+    } catch (error) {
+      // If check fails, assume database doesn't exist
+      databaseExists = false;
+    }
+
+    if (!databaseExists) {
+      // Database doesn't exist - create it first
+      const createDbCommand = `mysql -h ${safeHost} -P ${safePort} -u ${escapeShellArg(safeUsername)} -e "CREATE DATABASE ${safeDatabase} CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;"`;
+
+      await execPromise(createDbCommand, {
         env,
         maxBuffer: 1024 * 1024 * 500,
         timeout: 30 * 60 * 1000,
       });
-    } catch (err) {
-      // If no tables exist, this will fail - that's ok
+    } else {
+      // Database exists - drop all existing tables (preserves database structure, doesn't disconnect users)
+      try {
+        await execPromise(dropTablesCommand, {
+          env,
+          maxBuffer: 1024 * 1024 * 500,
+          timeout: 30 * 60 * 1000,
+        });
+      } catch (err) {
+        // If no tables exist, this will fail - that's ok
+      }
     }
 
     // Restore from backup (recreates all tables with data, auto_increment values, etc.)
@@ -176,7 +199,9 @@ const restoreBackup = async (config, backupFilePath) => {
     return {
       success: true,
       duration,
-      message: 'Restore completed successfully',
+      message: databaseExists
+        ? 'Restore completed successfully (database content refreshed)'
+        : 'Restore completed successfully (database recreated)',
     };
   } catch (error) {
     return {
@@ -220,9 +245,141 @@ const getDatabaseSize = async (config) => {
   }
 };
 
+/**
+ * Create incremental backup - exports only changed tables since last backup
+ * Uses information_schema.tables UPDATE_TIME to detect changes
+ */
+const createIncrementalBackup = async (config, outputPath, lastFullBackupDate) => {
+  const safeHost = validateInput(config.host, 'host', /^[a-zA-Z0-9\.\-]+$/);
+  const safeUsername = validateInput(config.username, 'username', /^[a-zA-Z0-9_\-@\.]+$/);
+  const safeDatabase = validateInput(config.database, 'database', /^[a-zA-Z0-9_\-]+$/);
+  const safePort = parseInt(config.port, 10);
+
+  if (isNaN(safePort) || safePort < 1 || safePort > 65535) {
+    throw new Error('Invalid port number');
+  }
+
+  try {
+    const startTime = Date.now();
+    const connection = await mysql.createConnection({
+      host: config.host,
+      port: config.port,
+      user: config.username,
+      password: config.password,
+      database: config.database,
+      ssl: config.sslEnabled ? { rejectUnauthorized: false } : false,
+    });
+
+    // Get tables that have been modified since last backup
+    let query;
+    let params;
+
+    if (lastFullBackupDate) {
+      // Find tables modified after last full backup
+      query = `
+        SELECT
+          table_name,
+          update_time,
+          (data_length + index_length) as table_size
+        FROM information_schema.tables
+        WHERE table_schema = ?
+          AND update_time IS NOT NULL
+          AND update_time > ?
+        ORDER BY update_time DESC
+      `;
+      params = [config.database, lastFullBackupDate];
+    } else {
+      // No last backup date - get all tables with recent updates
+      query = `
+        SELECT
+          table_name,
+          update_time,
+          (data_length + index_length) as table_size
+        FROM information_schema.tables
+        WHERE table_schema = ?
+          AND update_time IS NOT NULL
+        ORDER BY update_time DESC
+      `;
+      params = [config.database];
+    }
+
+    const [changedTables] = await connection.query(query, params);
+    await connection.end();
+
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const fileName = `${safeDatabase}_incremental_${timestamp}.sql`;
+    const filePath = path.join(outputPath, fileName);
+
+    if (changedTables.length === 0) {
+      // No changes detected - create empty incremental backup file
+      const content = `-- Incremental Backup: ${new Date().toISOString()}\n-- No changes detected since last backup\n`;
+      await fs.writeFile(filePath, content, 'utf8');
+
+      const stats = await fs.stat(filePath);
+      const duration = Math.floor((Date.now() - startTime) / 1000);
+
+      return {
+        success: true,
+        fileName,
+        filePath,
+        fileSize: stats.size,
+        duration,
+        changedTables: [],
+        message: 'No changes detected',
+      };
+    }
+
+    // Build mysqldump command for only changed tables
+    const tableList = changedTables.map(t => t.table_name).join(' ');
+
+    const env = {
+      ...process.env,
+      MYSQL_PWD: config.password,
+    };
+
+    // Include both schema and data for incremental (includes CREATE TABLE)
+    const command = `mysqldump -h ${safeHost} -P ${safePort} -u ${escapeShellArg(safeUsername)} ${safeDatabase} ${tableList} --no-create-db > "${filePath}"`;
+
+    await execPromise(command, {
+      env,
+      maxBuffer: 1024 * 1024 * 500, // 500MB buffer
+      timeout: 30 * 60 * 1000 // 30 minutes timeout
+    });
+
+    // Prepend header with metadata
+    const backupContent = await fs.readFile(filePath, 'utf8');
+    const header = `-- Incremental Backup: ${new Date().toISOString()}
+-- Base Backup Date: ${lastFullBackupDate || 'N/A'}
+-- Changed Tables: ${changedTables.map(t => t.table_name).join(', ')}
+-- Total Tables: ${changedTables.length}
+
+`;
+    await fs.writeFile(filePath, header + backupContent, 'utf8');
+
+    const duration = Math.floor((Date.now() - startTime) / 1000);
+    const stats = await fs.stat(filePath);
+
+    return {
+      success: true,
+      fileName,
+      filePath,
+      fileSize: stats.size,
+      duration,
+      changedTables: changedTables.map(t => t.table_name),
+      message: `Incremental backup completed with ${changedTables.length} changed tables`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
 module.exports = {
   testConnection,
   createBackup,
+  createIncrementalBackup,
   restoreBackup,
   getDatabaseSize,
 };
