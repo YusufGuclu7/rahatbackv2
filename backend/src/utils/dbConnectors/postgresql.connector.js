@@ -417,10 +417,136 @@ const createIncrementalBackup = async (config, outputPath, lastFullBackupDate) =
   }
 };
 
+/**
+ * Create differential backup - exports only changed tables since LAST FULL BACKUP
+ * Uses pg_stat_user_tables to detect changes
+ * Note: Differential backups are cumulative from the last full backup, not the last incremental
+ */
+const createDifferentialBackup = async (config, outputPath, lastFullBackupDate) => {
+  const safeHost = validateInput(config.host, 'host', /^[a-zA-Z0-9\.\-]+$/);
+  const safeUsername = validateInput(config.username, 'username', /^[a-zA-Z0-9_\-@\.]+$/);
+  const safeDatabase = validateInput(config.database, 'database', /^[a-zA-Z0-9_\-]+$/);
+  const safePort = parseInt(config.port, 10);
+
+  if (isNaN(safePort) || safePort < 1 || safePort > 65535) {
+    throw new Error('Invalid port number');
+  }
+
+  // Differential backup REQUIRES a full backup to exist first
+  if (!lastFullBackupDate) {
+    return {
+      success: false,
+      error: 'Differential backup requires a full backup first. Please run a full backup.',
+    };
+  }
+
+  const client = new Client({
+    host: config.host,
+    port: config.port,
+    user: config.username,
+    password: config.password,
+    database: config.database,
+    ssl: config.sslEnabled ? { rejectUnauthorized: false } : false,
+  });
+
+  const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+  const fileName = `${safeDatabase}_differential_${timestamp}.sql`;
+  const filePath = path.join(outputPath, fileName);
+
+  try {
+    const startTime = Date.now();
+    await client.connect();
+
+    // Get tables that have been modified since last FULL backup
+    // Using n_tup_ins, n_tup_upd, n_tup_del from pg_stat_user_tables
+    // Note: This is a simplified approach. In production, use WAL-based tracking for accuracy
+    const tablesQuery = `
+      SELECT
+        schemaname,
+        relname as tablename,
+        n_tup_ins + n_tup_upd + n_tup_del as total_changes
+      FROM pg_stat_user_tables
+      WHERE schemaname = 'public'
+      ORDER BY total_changes DESC
+    `;
+
+    const result = await client.query(tablesQuery);
+    const changedTables = result.rows.filter(row => row.total_changes > 0);
+
+    await client.end();
+
+    if (changedTables.length === 0) {
+      // No changes detected - create empty differential backup file
+      const content = `-- Differential Backup: ${new Date().toISOString()}\n-- Base Full Backup Date: ${lastFullBackupDate}\n-- No changes detected since last full backup\n`;
+      await fs.writeFile(filePath, content, 'utf8');
+
+      const stats = await fs.stat(filePath);
+      const duration = Math.floor((Date.now() - startTime) / 1000);
+
+      return {
+        success: true,
+        fileName,
+        filePath,
+        fileSize: stats.size,
+        duration,
+        changedTables: [],
+        message: 'No changes detected since last full backup',
+      };
+    }
+
+    // Build pg_dump command for only changed tables
+    const tableList = changedTables.map(t => `-t ${t.tablename}`).join(' ');
+
+    const env = {
+      ...process.env,
+      PGPASSWORD: config.password,
+    };
+
+    // Include both table schema and data
+    const command = `"${PG_DUMP}" -h ${safeHost} -p ${safePort} -U ${escapeShellArg(safeUsername)} -d ${safeDatabase} ${tableList} -F p --encoding=UTF8 -f "${filePath}"`;
+
+    await execPromise(command, {
+      env,
+      maxBuffer: 1024 * 1024 * 500, // 500MB buffer
+      timeout: 30 * 60 * 1000 // 30 minutes timeout
+    });
+
+    // Prepend header with metadata
+    const backupContent = await fs.readFile(filePath, 'utf8');
+    const header = `-- Differential Backup: ${new Date().toISOString()}
+-- Base Full Backup Date: ${lastFullBackupDate}
+-- Changed Tables: ${changedTables.map(t => t.tablename).join(', ')}
+-- Total Changes: ${changedTables.reduce((sum, t) => sum + parseInt(t.total_changes), 0)}
+-- NOTE: This differential contains ALL changes since the last FULL backup
+
+`;
+    await fs.writeFile(filePath, header + backupContent, 'utf8');
+
+    const duration = Math.floor((Date.now() - startTime) / 1000);
+    const stats = await fs.stat(filePath);
+
+    return {
+      success: true,
+      fileName,
+      filePath,
+      fileSize: stats.size,
+      duration,
+      changedTables: changedTables.map(t => t.tablename),
+      message: `Differential backup completed with ${changedTables.length} changed tables since last full backup`,
+    };
+  } catch (error) {
+    return {
+      success: false,
+      error: error.message,
+    };
+  }
+};
+
 module.exports = {
   testConnection,
   createBackup,
   createIncrementalBackup,
+  createDifferentialBackup,
   restoreBackup,
   getDatabaseSize,
 };

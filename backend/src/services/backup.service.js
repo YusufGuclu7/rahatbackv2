@@ -244,23 +244,37 @@ const executeBackup = async (backupJobId) => {
     const backupType = backupJob.backupType || 'full';
 
     if (backupType === 'incremental' && connector.createIncrementalBackup) {
-      // Execute incremental backup
+      // Execute incremental backup (based on last successful backup of any type)
       logger.info(`Starting INCREMENTAL backup for job ${backupJobId}, database ${dbConfig.name}`);
-      const lastFullBackupDate = backupJob.lastFullBackupAt;
-      result = await connector.createIncrementalBackup(dbConfig, jobBackupPath, lastFullBackupDate);
-    } else if (backupType === 'differential' && connector.createIncrementalBackup) {
-      // For differential, use incremental backup with lastFullBackupAt
+      const lastBackup = await getLastSuccessfulBackup(backupJobId);
+      const lastBackupDate = lastBackup ? lastBackup.completedAt : backupJob.lastFullBackupAt;
+      result = await connector.createIncrementalBackup(dbConfig, jobBackupPath, lastBackupDate);
+    } else if (backupType === 'differential' && connector.createDifferentialBackup) {
+      // Execute differential backup (based on last FULL backup only)
       logger.info(`Starting DIFFERENTIAL backup for job ${backupJobId}, database ${dbConfig.name}`);
-      const lastFullBackupDate = backupJob.lastFullBackupAt;
-      result = await connector.createIncrementalBackup(dbConfig, jobBackupPath, lastFullBackupDate);
+
+      // Differential backup REQUIRES a full backup first (search across all jobs for this database)
+      const lastFullBackup = await getLastFullBackupForDatabase(backupJob.databaseId);
+      if (!lastFullBackup) {
+        throw new Error('Differential backup requires a full backup first. Please run a full backup before attempting differential backup.');
+      }
+
+      const lastFullBackupDate = lastFullBackup.completedAt;
+      result = await connector.createDifferentialBackup(dbConfig, jobBackupPath, lastFullBackupDate);
+
+      // Update lastDifferentialBackupAt for differential backups
+      await backupJobModel.update(backupJobId, {
+        lastDifferentialBackupAt: new Date(),
+      });
     } else {
       // Execute full backup
       logger.info(`Starting FULL backup for job ${backupJobId}, database ${dbConfig.name}`);
       result = await connector.createBackup(dbConfig, jobBackupPath);
 
-      // Update lastFullBackupAt for full backups
+      // Update lastFullBackupAt for full backups and reset differential chain
       await backupJobModel.update(backupJobId, {
         lastFullBackupAt: new Date(),
+        lastDifferentialBackupAt: null, // Reset differential backup chain
       });
     }
 
@@ -349,10 +363,21 @@ const executeBackup = async (backupJobId) => {
       }
     }
 
+    // Set baseBackupId for incremental/differential backups
+    let baseBackupId = null;
+    if (backupType === 'incremental' || backupType === 'differential') {
+      // For differential, use database-wide last full backup
+      const lastFullBackup = await getLastFullBackupForDatabase(backupJob.databaseId);
+      if (lastFullBackup) {
+        baseBackupId = lastFullBackup.id;
+      }
+    }
+
     // Update backup history with success
     await backupHistoryModel.update(backupHistory.id, {
       status: 'success',
       backupType: backupType,
+      baseBackupId: baseBackupId,
       fileName: finalFileName,
       filePath: finalFilePath,
       fileSize: fileSize, // Keep as number, no BigInt conversion
@@ -754,6 +779,93 @@ const restoreBackup = async (historyId, userId) => {
         logger.error(`Failed to cleanup temporary files: ${error.message}`);
       }
     }
+  }
+};
+
+/**
+ * Get the last successful full backup for a database (across all jobs)
+ * @param {number} databaseId
+ * @returns {Promise<Object|null>}
+ */
+const getLastFullBackupForDatabase = async (databaseId) => {
+  try {
+    const lastFullBackup = await prisma.backupHistory.findFirst({
+      where: {
+        databaseId: parseInt(databaseId),
+        backupType: 'full',
+        status: 'success',
+      },
+      orderBy: {
+        completedAt: 'desc',
+      },
+    });
+    return lastFullBackup;
+  } catch (error) {
+    logger.error(`Error finding last full backup for database ${databaseId}: ${error.message}`);
+    return null;
+  }
+};
+
+/**
+ * Get the last successful full backup for a specific job
+ * @param {number} backupJobId
+ * @returns {Promise<Object|null>}
+ */
+const getLastFullBackup = async (backupJobId) => {
+  try {
+    const lastFullBackup = await prisma.backupHistory.findFirst({
+      where: {
+        backupJobId: parseInt(backupJobId),
+        backupType: 'full',
+        status: 'success',
+      },
+      orderBy: {
+        completedAt: 'desc',
+      },
+    });
+    return lastFullBackup;
+  } catch (error) {
+    logger.error(`Error finding last full backup for job ${backupJobId}: ${error.message}`);
+    return null;
+  }
+};
+
+/**
+ * Get the last successful backup of any type for a job
+ * @param {number} backupJobId
+ * @returns {Promise<Object|null>}
+ */
+const getLastSuccessfulBackup = async (backupJobId) => {
+  try {
+    const lastBackup = await prisma.backupHistory.findFirst({
+      where: {
+        backupJobId: parseInt(backupJobId),
+        status: 'success',
+      },
+      orderBy: {
+        completedAt: 'desc',
+      },
+    });
+    return lastBackup;
+  } catch (error) {
+    logger.error(`Error finding last successful backup for job ${backupJobId}: ${error.message}`);
+    return null;
+  }
+};
+
+/**
+ * Check if differential backup chain is valid
+ * @param {number} backupJobId
+ * @returns {Promise<boolean>}
+ */
+const checkDifferentialChainValid = async (backupJobId) => {
+  try {
+    const lastFullBackup = await getLastFullBackup(backupJobId);
+    // Chain is valid if there's a successful full backup
+    return lastFullBackup !== null;
+  } catch (error) {
+    logger.error(`Error checking differential chain for job ${backupJobId}: ${error.message}`);
+    return false;
   }
 };
 

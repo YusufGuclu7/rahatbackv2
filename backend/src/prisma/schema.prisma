@@ -75,9 +75,10 @@ model BackupJob {
   isEncrypted     Boolean         @default(false)
   encryptionPasswordHash String?
 
-  // Incremental backup fields
-  backupType       BackupType      @default(full)
-  lastFullBackupAt DateTime?
+  // Incremental & Differential backup fields
+  backupType               BackupType      @default(full)
+  lastFullBackupAt         DateTime?       // Last full backup timestamp
+  lastDifferentialBackupAt DateTime?       // Last differential backup timestamp
 
   lastRunAt       DateTime?
   nextRunAt       DateTime?
@@ -94,13 +95,20 @@ model BackupHistory {
   databaseId   Int
   status       BackupStatus
   backupType   BackupType   @default(full)
-  baseBackupId Int?         // For incremental: reference to the base full backup
+  baseBackupId Int?         // For incremental/differential: reference to the base full backup
   fileName     String
   fileSize     BigInt?
   filePath     String
   duration     Int?
   errorMessage String?
   isEncrypted  Boolean      @default(false)
+
+  // Backup verification fields
+  checksum            String?  // SHA256 checksum for file integrity
+  verificationStatus  String?  // 'pending', 'verified', 'failed'
+  verifiedAt          DateTime?
+  canBeRestored       Boolean  @default(false) // Only true if verified
+
   startedAt    DateTime     @default(now())
   completedAt  DateTime?
   backupJob    BackupJob?   @relation(fields: [backupJobId], references: [id])
