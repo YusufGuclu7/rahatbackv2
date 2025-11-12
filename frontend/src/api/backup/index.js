@@ -63,3 +63,10 @@ export const getBackupStats = async () => {
   const response = await axiosInstance.get('/v1/backups/stats');
   return response.data;
 };
+
+export const verifyBackup = async (id, verificationLevel = 'BASIC') => {
+  const response = await axiosInstance.post(`/v1/backups/history/${id}/verify`, {
+    verificationLevel,
+  });
+  return response.data;
+};

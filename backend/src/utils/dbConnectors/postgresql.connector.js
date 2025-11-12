@@ -542,6 +542,69 @@ const createDifferentialBackup = async (config, outputPath, lastFullBackupDate) 
   }
 };
 
+/**
+ * Verify PostgreSQL backup integrity
+ * Uses pg_restore --list to validate backup file structure
+ */
+const verifyBackup = async (config, backupFilePath) => {
+  const startTime = Date.now();
+
+  try {
+    // Check if file exists
+    try {
+      await fs.access(backupFilePath);
+    } catch {
+      return {
+        check: 'database_verification',
+        passed: false,
+        error: 'Backup file not found',
+      };
+    }
+
+    // Construct pg_restore command with --list option (validates without restoring)
+    const PG_RESTORE = PG_BIN_PATH ? path.join(PG_BIN_PATH, 'pg_restore') : 'pg_restore';
+    const command = `${escapeShellArg(PG_RESTORE)} --list ${escapeShellArg(backupFilePath)}`;
+
+    try {
+      const { stdout, stderr } = await execPromise(command);
+
+      // If pg_restore --list succeeds, the backup file structure is valid
+      const duration = Date.now() - startTime;
+      const lineCount = stdout.split('\n').filter(line => line.trim()).length;
+
+      return {
+        check: 'database_verification',
+        passed: true,
+        duration,
+        message: `PostgreSQL backup structure validated (${lineCount} objects found)`,
+        details: {
+          objectCount: lineCount,
+          method: 'pg_restore --list',
+        },
+      };
+    } catch (error) {
+      // pg_restore failed, backup is corrupted or invalid
+      return {
+        check: 'database_verification',
+        passed: false,
+        duration: Date.now() - startTime,
+        error: `pg_restore validation failed: ${error.message}`,
+        details: {
+          method: 'pg_restore --list',
+          stderr: error.stderr,
+        },
+      };
+    }
+  } catch (error) {
+    return {
+      check: 'database_verification',
+      passed: false,
+      duration: Date.now() - startTime,
+      error: error.message,
+    };
+  }
+};
+
 module.exports = {
   testConnection,
   createBackup,
@@ -549,4 +612,5 @@ module.exports = {
   createDifferentialBackup,
   restoreBackup,
   getDatabaseSize,
+  verifyBackup,
 };

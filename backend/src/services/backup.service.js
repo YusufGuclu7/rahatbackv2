@@ -402,6 +402,18 @@ const executeBackup = async (backupJobId) => {
 
     logger.info(`Backup completed successfully for job ${backupJobId}`);
 
+    // Auto-verify backup if enabled
+    if (backupJob.autoVerifyAfterBackup) {
+      logger.info(`Starting auto-verification for backup ${backupHistory.id}, level: ${backupJob.verificationLevel || 'BASIC'}`);
+      try {
+        await verifyBackup(backupHistory.id, backupJob.verificationLevel || 'BASIC');
+        logger.info(`Auto-verification completed successfully for backup ${backupHistory.id}`);
+      } catch (error) {
+        logger.error(`Auto-verification failed for backup ${backupHistory.id}: ${error.message}`);
+        // Don't fail the backup, just log the verification failure
+      }
+    }
+
     // Send success notification
     await sendBackupEmailNotification(dbConfig.userId, backupJob, dbConfig, 'success', {
       fileName: finalFileName,
@@ -869,6 +881,367 @@ const checkDifferentialChainValid = async (backupJobId) => {
   }
 };
 
+/**
+ * Verify backup integrity
+ * @param {number} backupHistoryId
+ * @param {string} verificationLevel - 'BASIC', 'DATABASE', 'FULL'
+ * @returns {Promise<Object>}
+ */
+const verifyBackup = async (backupHistoryId, verificationLevel = 'BASIC', userId = null) => {
+  const backup = await backupHistoryModel.findById(backupHistoryId);
+
+  if (!backup) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Backup not found');
+  }
+
+  if (backup.status !== 'success') {
+    throw new ApiError(httpStatus.BAD_REQUEST, 'Only successful backups can be verified');
+  }
+
+  // Verify ownership if userId provided
+  if (userId && backup.database.userId !== userId) {
+    throw new ApiError(httpStatus.FORBIDDEN, 'Access denied');
+  }
+
+  logger.info(`Starting backup verification for backup ${backupHistoryId}, level: ${verificationLevel}`);
+
+  let verificationResult = {
+    backupHistoryId,
+    verificationMethod: verificationLevel,
+    checks: [],
+    overallStatus: 'PENDING',
+  };
+
+  try {
+    // Get file path (download from cloud if needed)
+    let localFilePath = backup.filePath;
+    let shouldCleanupFile = false;
+
+    const backupJob = backup.backupJobId ? await backupJobModel.findById(backup.backupJobId) : null;
+
+    // Download from cloud if needed
+    if (backupJob && backupJob.cloudStorageId && (backupJob.storageType === 'google_drive' || backupJob.storageType === 's3')) {
+      const cloudStorage = await cloudStorageModel.findById(backupJob.cloudStorageId);
+
+      if (cloudStorage && cloudStorage.isActive) {
+        const tempDownloadPath = path.join(BACKUP_STORAGE_PATH, 'temp', 'verify', backup.fileName);
+        await fs.mkdir(path.dirname(tempDownloadPath), { recursive: true });
+
+        const cloudConnector = getCloudStorageConnector(cloudStorage.storageType);
+        logger.info(`Downloading backup from ${cloudStorage.storageType} for verification`);
+
+        const downloadResult = await cloudConnector.downloadBackup(cloudStorage, backup.filePath, tempDownloadPath);
+
+        if (!downloadResult.success) {
+          throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, `Failed to download from cloud: ${downloadResult.error}`);
+        }
+
+        localFilePath = tempDownloadPath;
+        shouldCleanupFile = true;
+      }
+    }
+
+    // Level 1: Basic Checks
+    logger.info('Running basic verification checks...');
+    verificationResult.checks.push(await verifyFileExistence(localFilePath));
+    verificationResult.checks.push(await verifyFileSize(localFilePath, backup.fileSize));
+    verificationResult.checks.push(await verifyChecksum(localFilePath, backup));
+
+    if (backup.fileName.replace('.enc', '').endsWith('.gz')) {
+      verificationResult.checks.push(await verifyCompressionIntegrity(localFilePath));
+    }
+
+    if (backup.isEncrypted && backupJob) {
+      verificationResult.checks.push(await verifyEncryptionIntegrity(localFilePath, backupJob));
+    }
+
+    // Level 2: Database-specific verification
+    if (verificationLevel === 'DATABASE' || verificationLevel === 'FULL') {
+      logger.info('Running database-specific verification...');
+      const dbConfig = await databaseService.getDatabaseConfig(backup.databaseId);
+      const connector = getConnector(dbConfig.type);
+
+      if (connector.verifyBackup) {
+        verificationResult.checks.push(await connector.verifyBackup(dbConfig, localFilePath));
+      } else {
+        verificationResult.checks.push({
+          check: 'database_verification',
+          passed: null,
+          skipped: true,
+          note: `Database verification not implemented for ${dbConfig.type}`,
+        });
+      }
+    }
+
+    // Level 3: Test restore (expensive!)
+    if (verificationLevel === 'FULL') {
+      logger.info('Running test restore...');
+      verificationResult.checks.push(await performTestRestore(backup, localFilePath));
+    }
+
+    // Clean up downloaded file
+    if (shouldCleanupFile) {
+      try {
+        await fs.unlink(localFilePath);
+      } catch (error) {
+        logger.warn(`Failed to cleanup downloaded file: ${error.message}`);
+      }
+    }
+
+    // Determine overall status
+    const failedChecks = verificationResult.checks.filter((c) => c.passed === false);
+    verificationResult.overallStatus = failedChecks.length === 0 ? 'PASSED' : 'FAILED';
+
+    // Update database
+    await backupHistoryModel.update(backupHistoryId, {
+      isVerified: true,
+      verificationStatus: verificationResult.overallStatus,
+      verificationMethod: verificationLevel,
+      verificationError: failedChecks.length > 0 ? failedChecks.map((c) => c.error).join('; ') : null,
+      verificationCompletedAt: new Date(),
+    });
+
+    logger.info(`Backup verification completed: ${backupHistoryId}, status: ${verificationResult.overallStatus}`);
+
+    return verificationResult;
+  } catch (error) {
+    logger.error(`Backup verification failed: ${error.message}`);
+
+    await backupHistoryModel.update(backupHistoryId, {
+      isVerified: true,
+      verificationStatus: 'FAILED',
+      verificationError: error.message,
+      verificationCompletedAt: new Date(),
+    });
+
+    throw new ApiError(httpStatus.INTERNAL_SERVER_ERROR, `Verification failed: ${error.message}`);
+  }
+};
+
+/**
+ * Helper: Verify file exists and is accessible
+ */
+const verifyFileExistence = async (filePath) => {
+  try {
+    await fs.access(filePath);
+    return { check: 'file_existence', passed: true, message: 'File exists and is accessible' };
+  } catch {
+    return { check: 'file_existence', passed: false, error: 'File not found or not accessible' };
+  }
+};
+
+/**
+ * Helper: Verify file size is reasonable
+ */
+const verifyFileSize = async (filePath, expectedSize) => {
+  try {
+    const stats = await fs.stat(filePath);
+    const isValid = stats.size > 0;
+    const sizeMatch = expectedSize ? stats.size === Number(expectedSize) : true;
+
+    return {
+      check: 'file_size',
+      passed: isValid && sizeMatch,
+      actual: stats.size,
+      expected: expectedSize,
+      message: isValid && sizeMatch ? 'File size is valid' : 'File size validation failed',
+      error: !isValid ? 'File is empty' : !sizeMatch ? 'File size mismatch' : null,
+    };
+  } catch (error) {
+    return { check: 'file_size', passed: false, error: error.message };
+  }
+};
+
+/**
+ * Helper: Calculate and verify checksum
+ */
+const verifyChecksum = async (filePath, backup) => {
+  const crypto = require('crypto');
+  const hash = crypto.createHash('sha256');
+  const stream = fsSync.createReadStream(filePath);
+
+  return new Promise((resolve) => {
+    stream.on('data', (data) => hash.update(data));
+    stream.on('end', async () => {
+      const checksum = hash.digest('hex');
+
+      // If this is the first time, save the checksum
+      if (!backup.checksumValue) {
+        await backupHistoryModel.update(backup.id, {
+          checksumAlgorithm: 'SHA256',
+          checksumValue: checksum,
+        });
+        resolve({
+          check: 'checksum',
+          passed: true,
+          checksum,
+          message: 'Checksum calculated and saved',
+          note: 'First calculation',
+        });
+      } else {
+        // Verify against stored checksum
+        const isValid = checksum === backup.checksumValue;
+        resolve({
+          check: 'checksum',
+          passed: isValid,
+          checksum,
+          expected: backup.checksumValue,
+          message: isValid ? 'Checksum validation passed' : 'Checksum mismatch detected',
+          error: isValid ? null : 'Checksum mismatch - file may be corrupted',
+        });
+      }
+    });
+    stream.on('error', (error) => {
+      resolve({ check: 'checksum', passed: false, error: error.message });
+    });
+  });
+};
+
+/**
+ * Helper: Verify compression integrity
+ */
+const verifyCompressionIntegrity = async (filePath) => {
+  try {
+    const inputStream = fsSync.createReadStream(filePath);
+    const gunzip = zlib.createGunzip();
+    let bytesRead = 0;
+
+    return new Promise((resolve) => {
+      gunzip.on('data', (chunk) => {
+        bytesRead += chunk.length;
+      });
+      gunzip.on('end', () => {
+        resolve({
+          check: 'compression_integrity',
+          passed: true,
+          uncompressedSize: bytesRead,
+          message: 'Compression integrity verified',
+        });
+      });
+      gunzip.on('error', (error) => {
+        resolve({
+          check: 'compression_integrity',
+          passed: false,
+          error: `Compression corrupted: ${error.message}`,
+        });
+      });
+      inputStream.pipe(gunzip);
+      inputStream.on('error', (error) => {
+        resolve({
+          check: 'compression_integrity',
+          passed: false,
+          error: error.message,
+        });
+      });
+    });
+  } catch (error) {
+    return { check: 'compression_integrity', passed: false, error: error.message };
+  }
+};
+
+/**
+ * Helper: Verify encryption integrity
+ */
+const verifyEncryptionIntegrity = async (filePath, backupJob) => {
+  try {
+    if (!backupJob || !backupJob.encryptionPasswordHash) {
+      return {
+        check: 'encryption_integrity',
+        passed: false,
+        error: 'Encryption password not available',
+      };
+    }
+
+    // Test decrypt first few bytes to verify encryption is valid
+    const tempPath = `${filePath}.verify_test`;
+
+    try {
+      await decryptFile(filePath, tempPath, backupJob.encryptionPasswordHash);
+      await fs.unlink(tempPath); // Clean up
+
+      return {
+        check: 'encryption_integrity',
+        passed: true,
+        message: 'Encryption integrity verified',
+      };
+    } catch (error) {
+      // Clean up if exists
+      try {
+        await fs.unlink(tempPath);
+      } catch {}
+
+      return {
+        check: 'encryption_integrity',
+        passed: false,
+        error: `Decryption test failed: ${error.message}`,
+      };
+    }
+  } catch (error) {
+    return {
+      check: 'encryption_integrity',
+      passed: false,
+      error: error.message,
+    };
+  }
+};
+
+/**
+ * Helper: Perform test restore (advanced, expensive!)
+ */
+const performTestRestore = async (backup, filePath) => {
+  const startTime = Date.now();
+
+  try {
+    const dbConfig = await databaseService.getDatabaseConfig(backup.databaseId);
+
+    // Create temporary test database name
+    const testDbName = `test_restore_${backup.id}_${Date.now()}`;
+    const testDbConfig = { ...dbConfig, database: testDbName };
+
+    // Get connector
+    const connector = getConnector(dbConfig.type);
+
+    if (!connector.performTestRestore) {
+      return {
+        check: 'test_restore',
+        passed: null,
+        skipped: true,
+        note: `Test restore not implemented for ${dbConfig.type}`,
+      };
+    }
+
+    // Perform test restore
+    logger.info(`Performing test restore to temporary database: ${testDbName}`);
+    const result = await connector.performTestRestore(testDbConfig, filePath);
+    const duration = Date.now() - startTime;
+
+    // Update backup history with test restore info
+    await backupHistoryModel.update(backup.id, {
+      testRestoreAttempted: true,
+      testRestoreSuccess: result.success,
+      testRestoreDuration: duration,
+      testRestoreLog: result.log || null,
+    });
+
+    return {
+      check: 'test_restore',
+      passed: result.success,
+      duration,
+      message: result.success ? 'Test restore completed successfully' : 'Test restore failed',
+      error: result.success ? null : result.error,
+      log: result.log,
+    };
+  } catch (error) {
+    const duration = Date.now() - startTime;
+    return {
+      check: 'test_restore',
+      passed: false,
+      duration,
+      error: error.message,
+    };
+  }
+};
+
 module.exports = {
   createBackupJob,
   getBackupJobById,
@@ -882,4 +1255,5 @@ module.exports = {
   deleteBackup,
   getBackupStats,
   restoreBackup,
+  verifyBackup,
 };

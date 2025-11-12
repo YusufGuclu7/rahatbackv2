@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { AgGridReact } from 'ag-grid-react';
 import { Box, Button, Chip, FormControl, InputLabel, Select, MenuItem } from '@mui/material';
-import { History, RefreshCw, Download, Trash2, RotateCcw } from 'lucide-react';
+import { History, RefreshCw, Download, Trash2, RotateCcw, CheckCircle } from 'lucide-react';
 import Swal from 'sweetalert2';
 import moment from 'moment';
 import 'ag-grid-community/styles/ag-grid.css';
@@ -152,6 +152,73 @@ const BackupHistoryList = () => {
     }
   };
 
+  const handleVerify = async (historyId, fileName) => {
+    try {
+      Swal.fire({
+        title: 'Doğrulanıyor...',
+        text: 'Backup dosyası kontrol ediliyor',
+        allowOutsideClick: false,
+        didOpen: () => {
+          Swal.showLoading();
+        },
+      });
+
+      const result = await backupApi.verifyBackup(historyId, 'BASIC');
+
+      const passed = result.checks?.filter((c) => c.passed).length || 0;
+      const failed = result.checks?.filter((c) => c.passed === false).length || 0;
+      const total = result.checks?.length || 0;
+
+      if (result.overallStatus === 'PASSED') {
+        await Swal.fire({
+          title: 'Doğrulama Başarılı!',
+          html: `
+            <p><strong>"${fileName}"</strong> dosyası başarıyla doğrulandı.</p>
+            <div style="margin-top: 15px; text-align: left; padding: 10px; background: #f0f0f0; border-radius: 5px;">
+              <p><strong>Sonuç:</strong> ${passed}/${total} kontrol başarılı</p>
+              ${result.checks
+                .map(
+                  (check) =>
+                    `<p style="margin: 5px 0;">
+                      ${check.passed ? '✅' : '❌'} ${check.check}: ${check.message || check.error || 'OK'}
+                    </p>`
+                )
+                .join('')}
+            </div>
+          `,
+          icon: 'success',
+        });
+      } else {
+        await Swal.fire({
+          title: 'Doğrulama Başarısız',
+          html: `
+            <p style="color: #d33;"><strong>"${fileName}"</strong> dosyasında sorunlar tespit edildi.</p>
+            <div style="margin-top: 15px; text-align: left; padding: 10px; background: #fff3cd; border-radius: 5px;">
+              <p><strong>Sonuç:</strong> ${passed}/${total} kontrol başarılı, ${failed} başarısız</p>
+              ${result.checks
+                .map(
+                  (check) =>
+                    `<p style="margin: 5px 0;">
+                      ${check.passed ? '✅' : '❌'} ${check.check}: ${check.message || check.error || 'OK'}
+                    </p>`
+                )
+                .join('')}
+            </div>
+          `,
+          icon: 'error',
+        });
+      }
+
+      loadBackupHistory();
+    } catch (error) {
+      Swal.fire({
+        title: 'Hata',
+        text: error.response?.data?.message || 'Doğrulama işlemi başarısız',
+        icon: 'error',
+      });
+    }
+  };
+
   const formatFileSize = (bytes) => {
     if (!bytes || bytes === '0') return '0 B';
     const sizes = ['B', 'KB', 'MB', 'GB'];
@@ -267,11 +334,21 @@ const BackupHistoryList = () => {
       },
       {
         headerName: 'İşlemler',
-        width: 200,
+        width: 250,
         cellRenderer: (params) => {
           const isSuccess = params.data.status === 'success';
           return (
             <Box sx={{ display: 'flex', gap: 1, alignItems: 'center', height: '100%' }}>
+              <Button
+                size="small"
+                variant="outlined"
+                color="info"
+                onClick={() => handleVerify(params.data.id, params.data.fileName)}
+                title="Doğrula"
+                disabled={!isSuccess}
+              >
+                <CheckCircle size={16} />
+              </Button>
               <Button
                 size="small"
                 variant="outlined"

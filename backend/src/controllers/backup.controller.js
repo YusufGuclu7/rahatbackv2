@@ -129,6 +129,24 @@ const getScheduledJobsStatus = catchAsync(async (req, res) => {
   res.send(status);
 });
 
+const verifyBackup = catchAsync(async (req, res) => {
+  const { verificationLevel = 'BASIC' } = req.body;
+  const result = await backupService.verifyBackup(
+    parseInt(req.params.historyId),
+    verificationLevel,
+    req.user.id
+  );
+
+  // Convert BigInt to string for JSON serialization
+  const serializedResult = JSON.parse(
+    JSON.stringify(result, (key, value) =>
+      typeof value === 'bigint' ? value.toString() : value
+    )
+  );
+
+  res.send(serializedResult);
+});
+
 module.exports = {
   createBackupJob,
   getBackupJobs,
@@ -143,4 +161,5 @@ module.exports = {
   getBackupStats,
   restoreBackup,
   getScheduledJobsStatus,
+  verifyBackup,
 };

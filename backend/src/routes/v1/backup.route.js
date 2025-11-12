@@ -42,6 +42,13 @@ router.post(
   backupController.restoreBackup
 );
 
+router.post(
+  '/history/:historyId/verify',
+  auth(),
+  validate(backupValidation.verifyBackup),
+  backupController.verifyBackup
+);
+
 // Stats
 router.get('/stats', auth(), backupController.getBackupStats);
 

@@ -80,6 +80,12 @@ model BackupJob {
   lastFullBackupAt         DateTime?       // Last full backup timestamp
   lastDifferentialBackupAt DateTime?       // Last differential backup timestamp
 
+  // Verification settings
+  autoVerifyAfterBackup    Boolean         @default(true)
+  verificationLevel        VerificationLevel @default(BASIC)
+  performTestRestore       Boolean         @default(false)
+  testRestoreSchedule      String?         // Weekly, Monthly
+
   lastRunAt       DateTime?
   nextRunAt       DateTime?
   createdAt       DateTime        @default(now())
@@ -104,10 +110,21 @@ model BackupHistory {
   isEncrypted  Boolean      @default(false)
 
   // Backup verification fields
-  checksum            String?  // SHA256 checksum for file integrity
-  verificationStatus  String?  // 'pending', 'verified', 'failed'
-  verifiedAt          DateTime?
-  canBeRestored       Boolean  @default(false) // Only true if verified
+  isVerified              Boolean            @default(false)
+  verificationStatus      VerificationStatus?
+  verificationMethod      String?            // BASIC, DATABASE, FULL
+  verificationError       String?            @db.Text
+  verificationCompletedAt DateTime?
+
+  // Checksum for integrity
+  checksumAlgorithm       String?            // SHA256, MD5
+  checksumValue           String?
+
+  // Test restore tracking (advanced)
+  testRestoreAttempted    Boolean            @default(false)
+  testRestoreSuccess      Boolean?
+  testRestoreDuration     Int?
+  testRestoreLog          String?            @db.Text
 
   startedAt    DateTime     @default(now())
   completedAt  DateTime?
@@ -210,6 +227,19 @@ enum BackupType {
   differential
 }
 
+enum VerificationStatus {
+  PENDING
+  PASSED
+  FAILED
+  SKIPPED
+}
+
+enum VerificationLevel {
+  BASIC       // File + checksum
+  DATABASE    // + database-specific tools
+  FULL        // + test restore
+}
+
 enum AuditAction {
   // Authentication
   LOGIN
@@ -239,6 +269,7 @@ enum AuditAction {
   BACKUP_DELETE
   BACKUP_DOWNLOAD
   BACKUP_RESTORE
+  BACKUP_VERIFY
 
   // Cloud Storage
   CLOUD_STORAGE_CREATE

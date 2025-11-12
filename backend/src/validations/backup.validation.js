@@ -187,6 +187,15 @@ const restoreBackup = {
   }),
 };
 
+const verifyBackup = {
+  params: Joi.object().keys({
+    historyId: Joi.number().integer().required(),
+  }),
+  body: Joi.object().keys({
+    verificationLevel: Joi.string().valid('BASIC', 'DATABASE', 'FULL').default('BASIC'),
+  }),
+};
+
 module.exports = {
   createBackupJob,
   updateBackupJob,
@@ -199,4 +208,5 @@ module.exports = {
   downloadBackup,
   deleteBackup,
   restoreBackup,
+  verifyBackup,
 };
