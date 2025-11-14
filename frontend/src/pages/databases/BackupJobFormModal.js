@@ -21,12 +21,14 @@ import { Save, X } from 'lucide-react';
 import Swal from 'sweetalert2';
 import * as backupApi from '../../api/backup';
 import * as cloudStorageApi from '../../api/cloudStorage';
+import AdvancedScheduleBuilder from '../../components/backup/AdvancedScheduleBuilder';
 
 const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
   const [formData, setFormData] = useState({
     name: '',
     scheduleType: 'manual',
     cronExpression: '',
+    advancedScheduleConfig: null,
     storageType: 'local',
     storagePath: '/backups',
     cloudStorageId: null,
@@ -38,6 +40,7 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
 
   const [loading, setLoading] = useState(false);
   const [showCronInput, setShowCronInput] = useState(false);
+  const [showAdvancedSchedule, setShowAdvancedSchedule] = useState(false);
   const [cloudStorages, setCloudStorages] = useState([]);
 
   useEffect(() => {
@@ -47,6 +50,7 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
         name: `${database.name} - Backup`,
         scheduleType: 'manual',
         cronExpression: '',
+        advancedScheduleConfig: null,
         storageType: 'local',
         storagePath: `/backups/${database.name.toLowerCase().replace(/\s/g, '_')}`,
         cloudStorageId: null,
@@ -62,7 +66,9 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
   }, [open, database]);
 
   useEffect(() => {
-    setShowCronInput(formData.scheduleType === 'custom');
+    // Hem 'custom' hem 'advanced' seçildiğinde gelişmiş zamanlama göster
+    setShowAdvancedSchedule(formData.scheduleType === 'custom' || formData.scheduleType === 'advanced');
+    setShowCronInput(false); // Cron input'unu artık hiç gösterme
   }, [formData.scheduleType]);
 
   const loadCloudStorages = async () => {
@@ -98,17 +104,26 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
       return;
     }
 
-    if (formData.scheduleType === 'custom' && !formData.cronExpression.trim()) {
-      Swal.fire('Hata', 'Cron ifadesi gerekli', 'error');
+    if ((formData.scheduleType === 'custom' || formData.scheduleType === 'advanced') && !formData.advancedScheduleConfig) {
+      Swal.fire('Hata', 'Gelişmiş zamanlama ayarları gerekli', 'error');
       return;
     }
 
     setLoading(true);
     try {
+      // Eğer custom seçildiyse, backend'e "advanced" olarak gönder
+      const scheduleType = formData.scheduleType === 'custom' ? 'advanced' : formData.scheduleType;
+
       const payload = {
         databaseId: database.id,
         ...formData,
+        scheduleType,
         retentionDays: parseInt(formData.retentionDays),
+        // If advanced schedule, send config as JSON string
+        advancedScheduleConfig:
+          (formData.scheduleType === 'advanced' || formData.scheduleType === 'custom') && formData.advancedScheduleConfig
+            ? JSON.stringify(formData.advancedScheduleConfig)
+            : null,
       };
 
       await backupApi.createBackupJob(payload);
@@ -131,7 +146,7 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
       weekly: 'Her Pazar saat 03:00\'da çalışır',
       monthly: 'Her ayın 1\'inde saat 04:00\'da çalışır',
       manual: 'Sadece manuel çalıştırıldığında yedek alır',
-      custom: 'Özel cron ifadesi belirtin (örn: 0 2 * * *)',
+      custom: 'Detaylı zamanlama seçenekleri ile özelleştirin - Sıklık, çalışma saatleri, günler ve daha fazlası',
     };
     return hints[type] || '';
   };
@@ -175,7 +190,7 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
                 <MenuItem value="daily">Günlük</MenuItem>
                 <MenuItem value="weekly">Haftalık</MenuItem>
                 <MenuItem value="monthly">Aylık</MenuItem>
-                <MenuItem value="custom">Özel (Cron)</MenuItem>
+                <MenuItem value="custom">Özel (Gelişmiş Zamanlama)</MenuItem>
               </Select>
             </FormControl>
             <Alert severity="info" sx={{ mt: 1 }}>
@@ -183,16 +198,11 @@ const BackupJobFormModal = ({ open, onClose, database, onSuccess }) => {
             </Alert>
           </Box>
 
-          {/* Cron İfadesi (sadece custom seçilirse) */}
-          {showCronInput && (
-            <TextField
-              label="Cron İfadesi"
-              fullWidth
-              value={formData.cronExpression}
-              onChange={(e) => handleChange('cronExpression', e.target.value)}
-              placeholder="0 2 * * *"
-              helperText="Format: dakika saat gün ay haftanın_günü"
-              required
+          {/* Advanced Schedule Builder (sadece custom seçilirse) */}
+          {showAdvancedSchedule && (
+            <AdvancedScheduleBuilder
+              value={formData.advancedScheduleConfig}
+              onChange={(config) => handleChange('advancedScheduleConfig', config)}
             />
           )}
 

@@ -66,6 +66,7 @@ model BackupJob {
   name            String
   scheduleType    ScheduleType
   cronExpression  String?
+  advancedScheduleConfig String?  @db.Text  // JSON config for advanced scheduling
   isActive        Boolean         @default(true)
   storageType     StorageType
   storagePath     String
@@ -204,6 +205,7 @@ enum ScheduleType {
   weekly
   monthly
   custom
+  advanced
 }
 
 enum StorageType {

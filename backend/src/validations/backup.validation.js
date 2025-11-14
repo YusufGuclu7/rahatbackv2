@@ -13,9 +13,9 @@ const createBackupJob = {
       }),
     scheduleType: Joi.string()
       .required()
-      .valid('manual', 'hourly', 'daily', 'weekly', 'monthly', 'custom')
+      .valid('manual', 'hourly', 'daily', 'weekly', 'monthly', 'custom', 'advanced')
       .messages({
-        'any.only': 'Schedule type must be one of: manual, hourly, daily, weekly, monthly, custom',
+        'any.only': 'Schedule type must be one of: manual, hourly, daily, weekly, monthly, custom, advanced',
       }),
     cronExpression: Joi.string()
       .allow('', null)
@@ -27,6 +27,15 @@ const createBackupJob = {
           .messages({
             'string.pattern.base': 'Invalid cron expression format',
           }),
+        otherwise: Joi.optional().allow('', null),
+      }),
+    advancedScheduleConfig: Joi.string()
+      .allow('', null)
+      .when('scheduleType', {
+        is: 'advanced',
+        then: Joi.string().required().messages({
+          'any.required': 'Advanced schedule configuration is required when schedule type is advanced',
+        }),
         otherwise: Joi.optional().allow('', null),
       }),
     storageType: Joi.string()
@@ -91,7 +100,7 @@ const updateBackupJob = {
         .min(3)
         .max(100)
         .pattern(/^[a-zA-Z0-9\s\-_]+$/),
-      scheduleType: Joi.string().valid('manual', 'hourly', 'daily', 'weekly', 'monthly', 'custom'),
+      scheduleType: Joi.string().valid('manual', 'hourly', 'daily', 'weekly', 'monthly', 'custom', 'advanced'),
       cronExpression: Joi.string()
         .when('scheduleType', {
           is: 'custom',
@@ -101,6 +110,7 @@ const updateBackupJob = {
           otherwise: Joi.forbidden(),
         })
         .allow(null),
+      advancedScheduleConfig: Joi.string().allow('', null),
       storageType: Joi.string().valid('local', 's3', 'google_drive'),
       storagePath: Joi.string()
         .min(1)
@@ -149,7 +159,7 @@ const runBackupJob = {
 const getBackupJobs = {
   query: Joi.object().keys({
     isActive: Joi.boolean(),
-    scheduleType: Joi.string().valid('manual', 'hourly', 'daily', 'weekly', 'monthly', 'custom'),
+    scheduleType: Joi.string().valid('manual', 'hourly', 'daily', 'weekly', 'monthly', 'custom', 'advanced'),
   }),
 };
 

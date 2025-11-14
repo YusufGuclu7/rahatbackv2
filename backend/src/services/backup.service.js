@@ -390,8 +390,12 @@ const executeBackup = async (backupJobId) => {
     let nextRunAt = null;
     if (backupJob.scheduleType !== 'manual') {
       const scheduleService = require('./schedule.service');
-      const cronExpression = scheduleService.getCronExpression(backupJob.scheduleType, backupJob.cronExpression);
-      nextRunAt = scheduleService.getNextRunTime(cronExpression);
+      nextRunAt = scheduleService.getNextRunTime(
+        backupJob.scheduleType,
+        backupJob.cronExpression,
+        backupJob.advancedScheduleConfig,
+        new Date() // Use current time as lastRunAt
+      );
     }
 
     // Update backup job last run time and next run time
@@ -738,9 +742,13 @@ const restoreBackup = async (historyId, userId) => {
       inputStream.pipe(gunzip).pipe(outputStream);
     });
 
-    // Clean up previous file if needed
+    // Clean up compressed file
     if (needsCleanup) {
       await fs.unlink(filePathToRestore);
+      // If this was the downloaded file, mark it as already cleaned
+      if (filePathToRestore === localFilePath) {
+        shouldCleanupDownloadedFile = false;
+      }
     }
 
     filePathToRestore = decompressedPath;
