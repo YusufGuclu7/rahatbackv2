@@ -144,13 +144,110 @@ const mockResponse = () => {
  */
 const mockNext = () => jest.fn();
 
+/**
+ * Generate a fake backup history entry for testing
+ */
+const generateFakeBackupHistory = (overrides = {}) => {
+  return {
+    id: 1,
+    backupJobId: 1,
+    databaseId: 1,
+    fileName: 'test_backup_20250117_120000.sql',
+    filePath: '/backups/test_backup_20250117_120000.sql',
+    fileSize: 1024000,
+    backupType: 'full',
+    status: 'success',
+    startedAt: new Date(),
+    completedAt: new Date(),
+    duration: 5000,
+    errorMessage: null,
+    compression: true,
+    isEncrypted: false,
+    storageLocation: 'local',
+    cloudStorageId: null,
+    verificationStatus: null,
+    verificationLevel: null,
+    verifiedAt: null,
+    checksum: 'a1b2c3d4e5f6',
+    createdAt: new Date(),
+    updatedAt: new Date(),
+    ...overrides,
+  };
+};
+
+/**
+ * Mock file system operations
+ */
+const mockFS = () => {
+  return {
+    promises: {
+      access: jest.fn().mockResolvedValue(undefined),
+      stat: jest.fn().mockResolvedValue({ size: 1024000 }),
+      readFile: jest.fn().mockResolvedValue(Buffer.from('test data')),
+      writeFile: jest.fn().mockResolvedValue(undefined),
+      unlink: jest.fn().mockResolvedValue(undefined),
+      mkdir: jest.fn().mockResolvedValue(undefined),
+      readdir: jest.fn().mockResolvedValue([]),
+    },
+    existsSync: jest.fn().mockReturnValue(true),
+    createReadStream: jest.fn(),
+    createWriteStream: jest.fn(),
+  };
+};
+
+/**
+ * Mock database connector
+ */
+const mockDatabaseConnector = () => {
+  return {
+    testConnection: jest.fn().mockResolvedValue(true),
+    createBackup: jest.fn().mockResolvedValue({
+      success: true,
+      filePath: '/backups/test_backup.sql',
+      fileName: 'test_backup.sql',
+      fileSize: 1024000,
+    }),
+    restoreBackup: jest.fn().mockResolvedValue({ success: true }),
+    createIncrementalBackup: jest.fn().mockResolvedValue({
+      success: true,
+      filePath: '/backups/test_incremental.sql',
+      fileName: 'test_incremental.sql',
+      fileSize: 512000,
+    }),
+    createDifferentialBackup: jest.fn().mockResolvedValue({
+      success: true,
+      filePath: '/backups/test_differential.sql',
+      fileName: 'test_differential.sql',
+      fileSize: 768000,
+    }),
+  };
+};
+
+/**
+ * Mock cloud storage connector
+ */
+const mockCloudStorageConnector = () => {
+  return {
+    uploadFile: jest.fn().mockResolvedValue({ url: 'https://s3.example.com/backup.sql' }),
+    uploadBackup: jest.fn().mockResolvedValue({ success: true, url: 'https://s3.example.com/backup.sql', fileId: 'backup-123' }),
+    downloadFile: jest.fn().mockResolvedValue(Buffer.from('backup data')),
+    downloadBackup: jest.fn().mockResolvedValue({ success: true }),
+    deleteFile: jest.fn().mockResolvedValue(true),
+    testConnection: jest.fn().mockResolvedValue(true),
+  };
+};
+
 module.exports = {
   generateFakeUser,
   generateFakeDatabase,
   generateFakeBackupJob,
   generateFakeAuditLog,
   generateFakeCloudStorage,
+  generateFakeBackupHistory,
   mockRequest,
   mockResponse,
   mockNext,
+  mockFS,
+  mockDatabaseConnector,
+  mockCloudStorageConnector,
 };

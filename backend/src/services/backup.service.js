@@ -154,6 +154,14 @@ const createBackupJob = async (userId, jobData) => {
     throw new ApiError(httpStatus.FORBIDDEN, 'Access denied');
   }
 
+  // Verify cloud storage if storage type is cloud
+  if (jobData.storageType === 'cloud' && jobData.cloudStorageId) {
+    const cloudStorage = await cloudStorageModel.findById(jobData.cloudStorageId);
+    if (!cloudStorage) {
+      throw new ApiError(httpStatus.NOT_FOUND, 'Cloud storage not found');
+    }
+  }
+
   const backupJob = await backupJobModel.create(jobData);
   return backupJob;
 };
@@ -184,16 +192,20 @@ const getUserBackupJobs = async (userId, filters = {}) => {
  */
 const updateBackupJob = async (id, userId, updateData) => {
   await getBackupJobById(id, userId); // Verify ownership
-  return await backupJobModel.update(id, updateData);
+  const updatedJob = await backupJobModel.update(id, updateData);
+  if (!updatedJob) {
+    throw new ApiError(httpStatus.NOT_FOUND, 'Backup job not found');
+  }
+  return updatedJob;
 };
 
 /**
  * Delete backup job
  */
 const deleteBackupJob = async (id, userId) => {
-  const backupJob = await getBackupJobById(id, userId);
+  await getBackupJobById(id, userId);
   await backupJobModel.delete(id);
-  return backupJob;
+  return { id };
 };
 
 /**
@@ -1264,4 +1276,5 @@ module.exports = {
   getBackupStats,
   restoreBackup,
   verifyBackup,
+  getLastFullBackupForDatabase,
 };
