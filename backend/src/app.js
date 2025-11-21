@@ -16,6 +16,11 @@ const ApiError = require('./utils/ApiError');
 
 const app = express();
 
+// Trust proxy - required for rate limiting behind reverse proxies (Render, Heroku, etc.)
+if (config.env === 'production') {
+  app.set('trust proxy', 1);
+}
+
 if (config.env !== 'test') {
   app.use(morgan.successHandler);
   app.use(morgan.errorHandler);
