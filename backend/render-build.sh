@@ -14,7 +14,9 @@ npx prisma generate
 # Clean up failed migrations
 echo "🧹 Cleaning up failed migrations..."
 npx prisma db execute --stdin <<SQL
-DELETE FROM "_prisma_migrations" WHERE migration_name = '20251113000000_add_pitr_support' AND finished_at IS NULL;
+DELETE FROM "_prisma_migrations"
+WHERE migration_name = '_DISABLED_20251113000000_add_pitr_support'
+   OR (migration_name = '20251113000000_add_pitr_support' AND finished_at IS NULL);
 SQL
 
 # Run database migrations
