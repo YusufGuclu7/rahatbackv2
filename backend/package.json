@@ -11,7 +11,8 @@
     "node": ">=16.0.0"
   },
   "scripts": {
-    "start": "pm2 start ecosystem.config.json --no-daemon",
+    "start": "node src/index.js",
+    "start:pm2": "pm2 start ecosystem.config.json --no-daemon",
     "dev": "cross-env NODE_ENV=development nodemon src/index.js",
     "test": "jest -i --colors --verbose --detectOpenHandles",
     "test:watch": "jest -i --watchAll",
@@ -25,7 +26,7 @@
     "prisma:studio": "prisma studio",
     "prisma:seed": "prisma db seed --preview-feature",
     "prisma:push": "prisma db push --preview-feature",
-    "prepare": "husky install"
+    "prepare": "husky install || true"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.908.0",
