@@ -72,3 +72,4 @@ yarn.lock
 update.sh
 src/prisma/*
 !src/prisma/schema.prisma
+!src/prisma/migrations/
