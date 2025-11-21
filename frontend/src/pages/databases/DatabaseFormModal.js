@@ -104,7 +104,15 @@ const DatabaseFormModal = ({ open, onClose, database, onSuccess }) => {
     setSaving(true);
     try {
       if (isEdit) {
-        await databaseApi.updateDatabase(database.id, data);
+        // Remove type field when updating (type cannot be changed)
+        const { type, ...updateData } = data;
+
+        // Remove password if empty (user doesn't want to change it)
+        if (!updateData.password || updateData.password.trim() === '') {
+          delete updateData.password;
+        }
+
+        await databaseApi.updateDatabase(database.id, updateData);
         Swal.fire('Başarılı', 'Veritabanı güncellendi', 'success');
       } else {
         await databaseApi.createDatabase(data);
@@ -164,7 +172,14 @@ const DatabaseFormModal = ({ open, onClose, database, onSuccess }) => {
               control={control}
               rules={{ required: 'Veritabanı tipi zorunludur' }}
               render={({ field }) => (
-                <TextField {...field} select label="Veritabanı Tipi" fullWidth>
+                <TextField
+                  {...field}
+                  select
+                  label="Veritabanı Tipi"
+                  fullWidth
+                  disabled={isEdit}
+                  helperText={isEdit ? 'Veritabanı tipi değiştirilemez' : ''}
+                >
                   {databaseTypes.map((option) => (
                     <MenuItem key={option.value} value={option.value}>
                       {option.label}
