@@ -8,19 +8,95 @@ import {
   InputAdornment,
   IconButton,
   Box,
+  CircularProgress,
 } from "@mui/material";
 import { useNavigate } from "react-router-dom";
 import { Visibility, VisibilityOff } from "@mui/icons-material";
+import Swal from "sweetalert2";
+import axiosInstance from "../../api/axiosInstance";
 import smallLogo from "../../assets/images/rahatsistem-logo.png";
+
 const Register = () => {
   const [email, setEmail] = useState("");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
+  const [loading, setLoading] = useState(false);
   const handleClickShowPassword = () => setShowPassword(!showPassword);
   const handleMouseDownPassword = (event) => event.preventDefault();
   const navigate = useNavigate();
   const [agree, setAgree] = useState(false);
+
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+
+    // Validation
+    if (!username.trim()) {
+      Swal.fire({
+        icon: "error",
+        title: "Hata",
+        text: "Kullanıcı adı boş olamaz!",
+      });
+      return;
+    }
+
+    if (!email.trim()) {
+      Swal.fire({
+        icon: "error",
+        title: "Hata",
+        text: "E-mail adresi boş olamaz!",
+      });
+      return;
+    }
+
+    if (!password.trim()) {
+      Swal.fire({
+        icon: "error",
+        title: "Hata",
+        text: "Şifre boş olamaz!",
+      });
+      return;
+    }
+
+    if (!agree) {
+      Swal.fire({
+        icon: "error",
+        title: "Hata",
+        text: "Gizlilik politikası ve şartlarını kabul etmelisiniz!",
+      });
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const response = await axiosInstance.post("/v1/auth/register", {
+        name: username,
+        email: email,
+        password: password,
+      });
+
+      Swal.fire({
+        icon: "success",
+        title: "Başarılı",
+        text: "Kayıt başarıyla tamamlandı! Giriş yapabilirsiniz.",
+        confirmButtonText: "Tamam",
+      }).then(() => {
+        navigate("/login");
+      });
+    } catch (error) {
+      console.error("Register error:", error);
+      const errorMessage = error?.response?.data?.message || "Kayıt işlemi başarısız oldu!";
+
+      Swal.fire({
+        icon: "error",
+        title: "Hata",
+        text: errorMessage,
+      });
+    } finally {
+      setLoading(false);
+    }
+  };
 
   return (
     <Grid
@@ -213,9 +289,10 @@ const Register = () => {
             color="secondary"
             type="submit"
             className="custom-button"
-            // onClick={handleSubmit}
+            onClick={handleSubmit}
+            disabled={loading}
           >
-            Kayıt Ol
+            {loading ? <CircularProgress size={24} color="inherit" /> : "Kayıt Ol"}
           </Button>
         </Grid>
         <Grid
