@@ -1,358 +1,391 @@
-# 🚀 Rahat Backup - Production Deployment Guide
+# 🚀 Rahat Backup - Self-Hosted Deployment Guide
 
-## 📋 Deployment Stack
-- **Backend:** Render.com (Node.js + PM2)
-- **Frontend:** Vercel (React)
-- **Database:** Render PostgreSQL
+## 📋 Overview
 
----
+Bu dokümantasyon, Rahat Backup'ı **kendi sunucunuzda** (self-hosted) deploy etmek için gerekli adımları içerir.
 
-## 🗄️ ADIM 1: Render PostgreSQL Setup
-
-### 1.1 Render'da PostgreSQL Oluştur
-1. [Render.com](https://render.com) hesabına giriş yap
-2. Dashboard → **New +** → **PostgreSQL**
-3. Ayarlar:
-   - **Name:** `rahat-backup-db`
-   - **Database:** `rahat_backup_prod`
-   - **User:** `rahat_admin` (otomatik oluşur)
-   - **Region:** Frankfurt (en yakın)
-   - **Plan:** Free (90 gün ücretsiz)
-4. **Create Database** tıkla
-
-### 1.2 Connection String'i Kopyala
-Database oluştuktan sonra:
-- **Internal Database URL** kopyala (daha hızlı)
-- Format: `postgresql://user:password@hostname:5432/dbname`
-
-### 1.3 Backend .env.production'ı Güncelle
-```bash
-# backend/.env.production dosyasında:
-DATABASE_URL=postgresql://rahat_admin:xxx@dpg-xxx.frankfurt-postgres.render.com/rahat_backup_prod
-```
+**Not:** Render.com veya Vercel gibi platformlara deployment için `docs/platform-specific/` klasöründeki guide'lara bakabilirsiniz.
 
 ---
 
-## 🖥️ ADIM 2: Backend Deployment (Render)
+## 🏗️ System Requirements
 
-### 2.1 GitHub Repository Hazırla
+### Backend Server
+- **OS:** Ubuntu 20.04+ / CentOS 8+ / Debian 11+
+- **Node.js:** v16.x veya üzeri
+- **PostgreSQL:** v12 veya üzeri
+- **RAM:** Minimum 2GB (4GB+ önerilir)
+- **Disk:** Minimum 20GB (backup storage için daha fazla gerekebilir)
+
+### Frontend Hosting
+- **Web Server:** Nginx / Apache
+- **SSL Certificate:** Let's Encrypt (ücretsiz) veya commercial
+
+---
+
+## 📦 Installation Steps
+
+### 1. Prerequisite Setup
+
 ```bash
-# Backend klasöründe
-cd backend
+# Ubuntu/Debian
+sudo apt update
+sudo apt install -y nodejs npm postgresql nginx certbot
 
-# Git initialized değilse:
-git init
-git add .
-git commit -m "Initial backend setup for production"
+# Node.js 18.x (LTS)
+curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
+sudo apt install -y nodejs
 
-# GitHub'a push et (veya mevcut repo kullan)
-git remote add origin https://github.com/username/rahat-backup-backend.git
-git push -u origin main
+# PM2 (Process Manager)
+sudo npm install -g pm2
 ```
 
-### 2.2 Render'da Web Service Oluştur
-1. Render Dashboard → **New +** → **Web Service**
-2. **Connect GitHub repository** seç
-3. Repository seç (rahat-backup veya backend repo)
-4. Ayarlar:
-   ```
-   Name: rahat-backup-api
-   Region: Frankfurt
-   Branch: main
-   Root Directory: backend (eğer monorepo ise)
-   Runtime: Node
-   Build Command: bash render-build.sh
-   Start Command: npm start
-   Plan: Free
-   ```
+### 2. PostgreSQL Setup
 
-### 2.3 Environment Variables Ekle
-Render'da **Environment** sekmesinde ekle:
+```bash
+# PostgreSQL kullanıcısına geç
+sudo -u postgres psql
 
+# Database ve user oluştur
+CREATE DATABASE rahat_backup_prod;
+CREATE USER rahat_admin WITH ENCRYPTED PASSWORD 'your-strong-password';
+GRANT ALL PRIVILEGES ON DATABASE rahat_backup_prod TO rahat_admin;
+\q
+```
+
+### 3. Backend Deployment
+
+```bash
+# Projeyi clone et
+git clone https://github.com/your-username/rahat-backup.git
+cd rahat-backup/backend
+
+# Dependencies kur
+npm install
+
+# .env.production dosyası oluştur
+cp .env.production.example .env.production
+
+# .env.production'ı düzenle (DATABASE_URL, JWT_SECRET, vb)
+nano .env.production
+
+# Prisma Client generate et
+npx prisma generate
+
+# Migrations çalıştır
+npx prisma migrate deploy
+
+# PM2 ile başlat
+pm2 start src/index.js --name rahat-backend --env production
+pm2 save
+pm2 startup  # Sunucu restart'ta otomatik başlasın
+```
+
+**Important `.env.production` variables:**
 ```env
-PORT=3000
-NODE_ENV=production
-DATABASE_URL=<Render PostgreSQL Internal URL>
-JWT_SECRET=<güçlü-random-secret-min-32-karakter>
-JWT_ACCESS_EXPIRATION_MINUTES=30
-JWT_REFRESH_EXPIRATION_DAYS=30
-JWT_RESET_PASSWORD_EXPIRATION_MINUTES=10
-JWT_VERIFY_EMAIL_EXPIRATION_MINUTES=10
-
-EMAIL_ENABLED=true
-EMAIL_FROM=your-email@gmail.com
+DATABASE_URL=postgresql://rahat_admin:password@localhost:5432/rahat_backup_prod
+JWT_SECRET=<generate-with-crypto>
+APP_URL=https://yourdomain.com
 SMTP_HOST=smtp.gmail.com
-SMTP_PORT=587
-SMTP_SECURE=false
 SMTP_USER=your-email@gmail.com
-SMTP_PASS=<gmail-app-password>
-
-GOOGLE_CLIENT_ID=<production-client-id>
-GOOGLE_CLIENT_SECRET=<production-client-secret>
-GOOGLE_REDIRECT_URI=https://rahat-backup-api.onrender.com/v1/cloud-storage/google-drive/callback
-
-AWS_CREDENTIALS_ENCRYPTION_KEY=<64-char-hex-string>
-BACKUP_STORAGE_PATH=/tmp/backups
-APP_URL=https://rahat-backup-api.onrender.com
+SMTP_PASS=your-app-password
 ```
 
-**⚠️ JWT_SECRET Generate:**
-```bash
-# Node.js ile:
-node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
-```
-
-**⚠️ AWS_CREDENTIALS_ENCRYPTION_KEY Generate:**
+Generate secrets:
 ```bash
 node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
 ```
 
-### 2.4 Deploy Başlat
-- **Create Web Service** tıkla
-- Build ve deploy otomatik başlayacak
-- Logs'u takip et: `npx prisma migrate deploy` çalışmalı
+### 4. Frontend Deployment
 
-### 2.5 Backend URL'i Kopyala
-Deploy tamamlandıktan sonra:
-- URL: `https://rahat-backup-api.onrender.com`
-- Test et: `https://rahat-backup-api.onrender.com/v1/health` (404 olabilir, normal)
-
----
-
-## 🌐 ADIM 3: Frontend Deployment (Vercel)
-
-### 3.1 GitHub Repository Hazırla
 ```bash
-cd frontend
+cd ../frontend
 
-# Git initialized değilse:
-git init
-git add .
-git commit -m "Initial frontend setup for production"
-git push
+# Dependencies kur
+npm install
+
+# .env.production dosyası oluştur
+cp .env.production.example .env.production
+
+# .env.production'ı düzenle
+nano .env.production
+
+# Production build oluştur
+npm run build
+
+# Build'i web server'a kopyala
+sudo cp -r build/* /var/www/rahat-backup/
 ```
 
-### 3.2 Vercel'de Project Oluştur
-1. [Vercel](https://vercel.com) hesabına giriş yap
-2. **Add New** → **Project**
-3. **Import Git Repository** seç
-4. Repository seç (rahat-backup veya frontend repo)
-5. Ayarlar:
-   ```
-   Framework Preset: Create React App
-   Root Directory: frontend (eğer monorepo ise)
-   Build Command: npm run build
-   Output Directory: build
-   Install Command: npm install
-   ```
-
-### 3.3 Environment Variables Ekle
-Vercel'de **Environment Variables** sekmesinde:
-
+**`.env.production`:**
 ```env
-REACT_APP_API_URL=https://rahat-backup-api.onrender.com
-REACT_APP_LANDING_PAGE_DOMAIN=rahatbackup.com
+REACT_APP_API_URL=https://api.yourdomain.com
 ```
 
-**⚠️ Dikkat:** Backend URL'ini doğru gir (trailing slash olmamalı)
+### 5. Nginx Configuration
 
-### 3.4 Deploy Başlat
-- **Deploy** tıkla
-- Build başlayacak (2-3 dakika)
-- Deploy tamamlanınca URL verilecek: `https://rahat-backup.vercel.app`
-
----
-
-## 🧪 ADIM 4: Test & Verification
-
-### 4.1 Backend Health Check
 ```bash
-# API çalışıyor mu?
-curl https://rahat-backup-api.onrender.com/v1/auth/login
-
-# Beklenen: 400 Bad Request (çünkü body yok, ama endpoint çalışıyor)
+# Backend için (API subdomain)
+sudo nano /etc/nginx/sites-available/rahat-api
 ```
 
-### 4.2 Frontend Test
-1. Browser'da aç: `https://rahat-backup.vercel.app`
-2. Login sayfası açılmalı
-3. Yeni hesap oluştur (Register)
-4. Login ol
-5. Dashboard görünmeli
+```nginx
+server {
+    listen 80;
+    server_name api.yourdomain.com;
 
-### 4.3 Backup Job Test
-1. Database bağlantısı ekle (PostgreSQL/MySQL)
-2. Cloud storage ekle (S3 veya Google Drive)
-3. Backup job oluştur
-4. "Backup Now" çalıştır
-5. Logs'da hata var mı kontrol et
-
-### 4.4 Render Logs İzleme
+    location / {
+        proxy_pass http://localhost:3000;
+        proxy_http_version 1.1;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection 'upgrade';
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_cache_bypass $http_upgrade;
+    }
+}
 ```
-Render Dashboard → rahat-backup-api → Logs
+
+```bash
+# Frontend için
+sudo nano /etc/nginx/sites-available/rahat-frontend
 ```
 
-Şunları kontrol et:
-- ✅ Prisma migration başarılı
-- ✅ Server started on port 3000
-- ✅ Database connected
-- ❌ Hata yok
+```nginx
+server {
+    listen 80;
+    server_name yourdomain.com www.yourdomain.com;
+    root /var/www/rahat-backup;
+    index index.html;
+
+    location / {
+        try_files $uri $uri/ /index.html;
+    }
+
+    # Gzip compression
+    gzip on;
+    gzip_types text/plain text/css application/json application/javascript text/xml application/xml;
+}
+```
+
+```bash
+# Enable sites
+sudo ln -s /etc/nginx/sites-available/rahat-api /etc/nginx/sites-enabled/
+sudo ln -s /etc/nginx/sites-available/rahat-frontend /etc/nginx/sites-enabled/
+
+# Test ve restart
+sudo nginx -t
+sudo systemctl restart nginx
+```
+
+### 6. SSL Certificate (Let's Encrypt)
+
+```bash
+# Frontend için SSL
+sudo certbot --nginx -d yourdomain.com -d www.yourdomain.com
+
+# Backend için SSL
+sudo certbot --nginx -d api.yourdomain.com
+
+# Auto-renewal test
+sudo certbot renew --dry-run
+```
 
 ---
 
-## 🔧 ADIM 5: CORS Düzeltme (Gerekirse)
+## 🔄 Updates & Maintenance
 
-Eğer frontend'den backend'e istek atarken CORS hatası alırsan:
+### Backend Update
 
-### Backend'de CORS ayarları (backend/src/app.js)
-```javascript
-const cors = require('cors');
+```bash
+cd rahat-backup/backend
+git pull origin main
+npm install
+npx prisma migrate deploy
+npx prisma generate
+pm2 restart rahat-backend
+```
 
-app.use(cors({
-  origin: [
-    'http://localhost:3001',
-    'https://rahat-backup.vercel.app',
-    'https://rahat-backup-*.vercel.app' // Preview deployments
-  ],
-  credentials: true
-}));
+### Frontend Update
+
+```bash
+cd rahat-backup/frontend
+git pull origin main
+npm install
+npm run build
+sudo cp -r build/* /var/www/rahat-backup/
+```
+
+### Database Backup
+
+```bash
+# Otomatik günlük backup (crontab)
+0 2 * * * pg_dump rahat_backup_prod > /backups/rahat_$(date +\%Y\%m\%d).sql
+```
+
+### Monitoring
+
+```bash
+# PM2 logs
+pm2 logs rahat-backend
+
+# Nginx logs
+sudo tail -f /var/log/nginx/error.log
+
+# PostgreSQL logs
+sudo tail -f /var/log/postgresql/postgresql-*.log
 ```
 
 ---
 
-## 📊 ADIM 6: Monitoring & Logs
+## 🧪 Testing
 
-### 6.1 Render Monitoring
-- **Metrics:** CPU, Memory kullanımı
-- **Logs:** Real-time logs
-- **Events:** Deploy history
+### Backend Health Check
+```bash
+curl https://api.yourdomain.com/v1/auth/login
+# Expected: 400 Bad Request (endpoint works)
+```
 
-### 6.2 Vercel Analytics
-- **Analytics** sekmesinde:
-  - Page views
-  - Performance metrics
-  - Error tracking
-
-### 6.3 Database Monitoring
-Render PostgreSQL Dashboard:
-- **Metrics:** Connection count, DB size
-- **Backups:** Otomatik 7 günlük backup
+### Frontend Check
+1. Open: https://yourdomain.com
+2. Register new account
+3. Login
+4. Create database connection
+5. Create backup job
 
 ---
 
 ## 🚨 Troubleshooting
 
-### Problem 1: Prisma Migration Hatası
-**Hata:** `prisma migrate deploy` failed
-
-**Çözüm:**
+### Backend won't start
 ```bash
-# Local'de test et:
-DATABASE_URL="postgresql://..." npx prisma migrate deploy
+# Check logs
+pm2 logs rahat-backend
 
-# Render'da manuel çalıştır (Render Shell):
-npx prisma migrate deploy
+# Common issues:
+# - DATABASE_URL wrong
+# - Port 3000 already in use
+# - Missing environment variables
 ```
 
-### Problem 2: Environment Variable Yüklenmedi
-**Hata:** `JWT_SECRET is not defined`
+### Database connection failed
+```bash
+# Test connection
+psql -U rahat_admin -d rahat_backup_prod -h localhost
 
-**Çözüm:**
-- Render'da Environment tab'inde değişkeni ekle
-- Service'i **Manual Deploy** ile yeniden başlat
+# Check PostgreSQL status
+sudo systemctl status postgresql
+```
 
-### Problem 3: Frontend API'ye Ulaşamıyor
-**Hata:** `Network Error` veya CORS
+### Nginx 502 Bad Gateway
+```bash
+# Backend çalışıyor mu?
+pm2 status
 
-**Çözüm:**
-1. Backend URL'i kontrol et (https, trailing slash yok)
-2. Backend'de CORS ayarlarını kontrol et
-3. Vercel'de env var doğru mu?
-
-### Problem 4: Google Drive OAuth Çalışmıyor
-**Hata:** `redirect_uri_mismatch`
-
-**Çözüm:**
-1. Google Cloud Console → Credentials
-2. OAuth Client'ta Authorized redirect URIs ekle:
-   ```
-   https://rahat-backup-api.onrender.com/v1/cloud-storage/google-drive/callback
-   ```
+# Port 3000 açık mı?
+netstat -tlnp | grep 3000
+```
 
 ---
 
-## ✅ Deployment Checklist
+## 📊 Architecture (Current - Phase 1)
 
-### Before Deploy
-- [ ] `.env.production` dosyaları hazır
-- [ ] JWT_SECRET generate edildi (güçlü)
-- [ ] AWS encryption key generate edildi
-- [ ] Gmail App Password alındı
-- [ ] Google OAuth production credentials hazır
-- [ ] GitHub repository güncel
+```
+┌─────────────────────┐
+│  Web Browser        │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Nginx (Reverse     │
+│  Proxy + SSL)       │
+└──────────┬──────────┘
+           │
+     ┌─────┴─────┐
+     ▼           ▼
+┌─────────┐ ┌──────────────┐
+│Frontend │ │Backend API   │
+│(React)  │ │(Node.js/PM2) │
+└─────────┘ └──────┬───────┘
+                   │
+                   ▼
+            ┌──────────────┐
+            │PostgreSQL DB │
+            └──────────────┘
+```
 
-### Database
-- [ ] Render PostgreSQL oluşturuldu
-- [ ] Connection string kopyalandı
-- [ ] `.env.production` güncellendi
+**⚠️ Phase 1 Limitation:** Şu anda sadece **public erişilebilir** database'leri destekliyoruz (AWS RDS, managed databases, etc).
 
-### Backend
-- [ ] Render Web Service oluşturuldu
-- [ ] Environment variables eklendi
-- [ ] Build successful
-- [ ] Prisma migration çalıştı
-- [ ] Logs'da hata yok
-
-### Frontend
-- [ ] Vercel project oluşturuldu
-- [ ] REACT_APP_API_URL doğru
-- [ ] Build successful
-- [ ] Login sayfası açılıyor
-
-### Testing
-- [ ] Register çalışıyor
-- [ ] Login çalışıyor
-- [ ] Dashboard yükleniyor
-- [ ] Database connection eklenebiliyor
-- [ ] Backup job oluşturuluyor
-- [ ] Backup çalıştırılabiliyor
+**Phase 2 (Coming Soon):** Desktop Agent eklenecek → Local database'lere erişim sağlanacak.
 
 ---
 
-## 🎉 Deploy Tamamlandı!
+## 🔮 Phase 2: Desktop Agent Architecture
+
+```
+┌─────────────────────┐
+│  Web Dashboard      │
+│  (Yönetim UI)       │
+└──────────┬──────────┘
+           │ API
+           ▼
+┌─────────────────────┐
+│  Backend API        │
+└──────────┬──────────┘
+           │ WebSocket
+           ▼
+┌─────────────────────┐
+│  Desktop Agent      │ ← Kullanıcı PC'sinde
+│  (Electron App)     │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│  Local PostgreSQL   │ ← localhost:5432
+│  MySQL, MSSQL, etc  │
+└─────────────────────┘
+```
+
+---
+
+## 📞 Support & Documentation
+
+- **Backend API:** `backend/README.md`
+- **Frontend:** `frontend/README.md`
+- **Database Schema:** `backend/src/prisma/schema.prisma`
+- **Platform-Specific Guides:** `docs/platform-specific/`
+  - Render.com deployment
+  - Vercel deployment
+  - Docker deployment
+
+---
+
+## ✅ Production Checklist
+
+- [ ] PostgreSQL kuruldu ve güvenli
+- [ ] Backend `.env.production` yapılandırıldı
+- [ ] Frontend `.env.production` yapılandırıldı
+- [ ] PM2 ile backend çalışıyor
+- [ ] Nginx reverse proxy yapılandırıldı
+- [ ] SSL certificate kuruldu (Let's Encrypt)
+- [ ] Firewall yapılandırıldı (80, 443 açık)
+- [ ] Database backup cron job kuruldu
+- [ ] Monitoring kuruldu (PM2, logs)
+- [ ] Test edildi (register, login, backup)
+
+---
+
+## 🎉 Deployment Complete!
 
 **Production URLs:**
-- Frontend: `https://rahat-backup.vercel.app`
-- Backend: `https://rahat-backup-api.onrender.com`
-- Database: Render Internal (secure)
+- Frontend: `https://yourdomain.com`
+- Backend API: `https://api.yourdomain.com`
+- Database: Internal (PostgreSQL)
 
 **Next Steps:**
-1. 1 hafta staging test
-2. Bug fixes
-3. Custom domain ekle (opsiyonel)
-4. SSL certificate (Render/Vercel otomatik)
-5. Faz 2: Desktop Agent'a geç! 🖥️
-
----
-
-## 💰 Maliyet (İlk 90 Gün)
-
-| Service | Plan | Cost |
-|---------|------|------|
-| Render PostgreSQL | Starter | **$0** (90 gün) |
-| Render Web Service | Free | **$0** |
-| Vercel | Hobby | **$0** |
-| **TOPLAM** | | **$0/ay** |
-
-**90 gün sonra:**
-- Render PostgreSQL: $7/ay
-- Diğerleri: $0/ay
-- **Toplam: $7/ay**
-
----
-
-## 📞 Support
-
-- **Render Docs:** https://render.com/docs
-- **Vercel Docs:** https://vercel.com/docs
-- **Prisma Docs:** https://www.prisma.io/docs
+1. Test all features thoroughly
+2. Monitor logs for first week
+3. Setup automated database backups
+4. Phase 2: Desktop Agent development 🖥️
