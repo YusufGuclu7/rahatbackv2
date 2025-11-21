@@ -5,12 +5,16 @@ const config = require('../config/config');
 const prisma = require('../utils/database');
 const logger = require('../config/logger');
 
-const mailgun = new Mailgun(formData);
-const client = mailgun.client({
-  username: 'api',
-  key: config.email.mailgun.auth.api_key,
-  url: config.email.mailgun.host,
-});
+// Initialize Mailgun client only if credentials are available
+let client = null;
+if (config.email.mailgun.auth.api_key && config.email.mailgun.host) {
+  const mailgun = new Mailgun(formData);
+  client = mailgun.client({
+    username: 'api',
+    key: config.email.mailgun.auth.api_key,
+    url: config.email.mailgun.host,
+  });
+}
 
 /**
  * Create SMTP transporter from environment config
