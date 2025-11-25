@@ -7,6 +7,7 @@ class WebSocketService extends EventEmitter {
     super();
     this.ws = null;
     this.isConnected = false;
+    this.shouldReconnect = true;
     this.reconnectInterval = 5000;
     this.heartbeatInterval = 30000;
     this.heartbeatTimer = null;
@@ -17,6 +18,9 @@ class WebSocketService extends EventEmitter {
    * Connect to WebSocket server
    */
   connect() {
+    // Enable auto-reconnect when manually connecting
+    this.shouldReconnect = true;
+
     const serverUrl = config.getServerUrl();
     const wsUrl = serverUrl.replace('http://', 'ws://').replace('https://', 'wss://');
     const wsEndpoint = `${wsUrl}/ws/agent`;
@@ -54,8 +58,10 @@ class WebSocketService extends EventEmitter {
         this.stopHeartbeat();
         this.emit('disconnected');
 
-        // Attempt reconnect
-        this.scheduleReconnect();
+        // Attempt reconnect only if enabled
+        if (this.shouldReconnect) {
+          this.scheduleReconnect();
+        }
       });
 
       this.ws.on('error', (error) => {
@@ -196,6 +202,9 @@ class WebSocketService extends EventEmitter {
    * Disconnect from WebSocket
    */
   disconnect() {
+    // Disable auto-reconnect when manually disconnecting
+    this.shouldReconnect = false;
+
     this.stopHeartbeat();
 
     if (this.reconnectTimer) {

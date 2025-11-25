@@ -42,6 +42,60 @@ const createTray = (mainWindow, settingsWindow) => {
 const updateTrayMenu = (mainWindow, settingsWindow) => {
   if (!tray) return;
 
+  // Check if user is authenticated
+  const isAuthenticated = config.isAuthenticated();
+
+  if (!isAuthenticated) {
+    // Logged out menu - minimal
+    const contextMenu = Menu.buildFromTemplate([
+      {
+        label: '❌ Disconnected',
+        enabled: false,
+      },
+      { type: 'separator' },
+      {
+        label: '🔑 Login',
+        click: () => {
+          const { BrowserWindow } = require('electron');
+          const path = require('path');
+
+          // Check if login window already exists
+          let loginWindow = BrowserWindow.getAllWindows().find(
+            (win) => !win.isDestroyed() && win.getTitle().includes('Login')
+          );
+
+          if (!loginWindow) {
+            loginWindow = new BrowserWindow({
+              width: 450,
+              height: 600,
+              show: true,
+              resizable: false,
+              webPreferences: {
+                nodeIntegration: true,
+                contextIsolation: false,
+              },
+              icon: path.join(__dirname, '..', 'assets', 'rahatsistem-logo.png'),
+            });
+            loginWindow.loadFile(path.join(__dirname, 'renderer', 'login.html'));
+          } else {
+            loginWindow.show();
+            loginWindow.focus();
+          }
+        },
+      },
+      {
+        label: '❌ Quit',
+        click: () => {
+          app.quit();
+        },
+      },
+    ]);
+
+    tray.setContextMenu(contextMenu);
+    return;
+  }
+
+  // Logged in menu - full features
   const statusText =
     connectionStatus === 'online'
       ? '✅ Connected'
@@ -144,8 +198,8 @@ const updateTrayMenu = (mainWindow, settingsWindow) => {
 
         if (response.response === 1) {
           // User clicked Logout
-          const apiService = require('../services/api.service');
-          const websocketService = require('../services/websocket.service');
+          const apiService = require('./services/api.service');
+          const websocketService = require('./services/websocket.service');
 
           // Disconnect WebSocket
           websocketService.disconnect();
@@ -167,9 +221,15 @@ const updateTrayMenu = (mainWindow, settingsWindow) => {
           updateConnectionStatus('offline', mainWindow, settingsWindow);
           updateStats({ databases: 0, jobs: 0 }, mainWindow, settingsWindow);
 
-          // Close all windows
+          // Close dashboard and settings windows only (not all windows)
           const { BrowserWindow } = require('electron');
-          BrowserWindow.getAllWindows().forEach((win) => win.close());
+          BrowserWindow.getAllWindows().forEach((win) => {
+            const winTitle = win.getTitle();
+            // Close dashboard and settings, but not login window if it exists
+            if (winTitle.includes('Dashboard') || winTitle.includes('Settings')) {
+              win.close();
+            }
+          });
 
           // Show login window
           const path = require('path');

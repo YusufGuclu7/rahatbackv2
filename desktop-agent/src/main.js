@@ -275,15 +275,22 @@ ipcMain.handle('logout', async () => {
     // Close dashboard window if open
     if (dashboardWindow && !dashboardWindow.isDestroyed()) {
       dashboardWindow.close();
+      dashboardWindow = null;
     }
 
     // Close settings window if open
     if (settingsWindow && !settingsWindow.isDestroyed()) {
       settingsWindow.close();
+      settingsWindow = null;
     }
 
-    // Show login window
-    createMainWindow();
+    // Show login window (don't close existing if any)
+    if (!mainWindow || mainWindow.isDestroyed()) {
+      createMainWindow();
+    } else {
+      mainWindow.show();
+      mainWindow.focus();
+    }
 
     return { success: true };
   } catch (error) {
