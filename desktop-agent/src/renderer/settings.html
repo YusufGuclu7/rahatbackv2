@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rahat Backup Agent - Settings</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      body {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial,
+          sans-serif;
+        background: #f5f5f5;
+        padding: 20px;
+      }
+
+      .container {
+        background: white;
+        border-radius: 12px;
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+        padding: 30px;
+        max-width: 500px;
+        margin: 0 auto;
+      }
+
+      h1 {
+        color: #333;
+        font-size: 24px;
+        margin-bottom: 20px;
+      }
+
+      .section {
+        margin-bottom: 30px;
+      }
+
+      .section h2 {
+        color: #667eea;
+        font-size: 16px;
+        margin-bottom: 15px;
+        text-transform: uppercase;
+        font-weight: 600;
+      }
+
+      .info-group {
+        display: flex;
+        justify-content: space-between;
+        padding: 12px 0;
+        border-bottom: 1px solid #eee;
+      }
+
+      .info-group:last-child {
+        border-bottom: none;
+      }
+
+      .info-label {
+        color: #666;
+        font-weight: 500;
+      }
+
+      .info-value {
+        color: #333;
+      }
+
+      .status-badge {
+        padding: 4px 12px;
+        border-radius: 12px;
+        font-size: 13px;
+        font-weight: 600;
+      }
+
+      .status-online {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      .status-offline {
+        background: #ffebee;
+        color: #c62828;
+      }
+
+      .checkbox-group {
+        display: flex;
+        align-items: center;
+        padding: 12px 0;
+      }
+
+      .checkbox-group input[type='checkbox'] {
+        width: 20px;
+        height: 20px;
+        margin-right: 12px;
+        cursor: pointer;
+      }
+
+      .checkbox-group label {
+        color: #333;
+        cursor: pointer;
+      }
+
+      .button-group {
+        display: flex;
+        gap: 10px;
+        margin-top: 20px;
+      }
+
+      button {
+        flex: 1;
+        padding: 12px;
+        border: none;
+        border-radius: 8px;
+        font-size: 14px;
+        font-weight: 600;
+        cursor: pointer;
+        transition: all 0.2s;
+      }
+
+      .btn-primary {
+        background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        color: white;
+      }
+
+      .btn-primary:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+      }
+
+      .btn-secondary {
+        background: #f5f5f5;
+        color: #333;
+      }
+
+      .btn-secondary:hover {
+        background: #e0e0e0;
+      }
+
+      .btn-danger {
+        background: #ef5350;
+        color: white;
+      }
+
+      .btn-danger:hover {
+        background: #e53935;
+      }
+
+      .message {
+        padding: 12px;
+        border-radius: 8px;
+        margin-bottom: 20px;
+        display: none;
+      }
+
+      .message-success {
+        background: #e8f5e9;
+        color: #2e7d32;
+      }
+
+      .message-error {
+        background: #ffebee;
+        color: #c62828;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="container">
+      <h1>Agent Settings</h1>
+
+      <div class="message message-success" id="successMessage"></div>
+      <div class="message message-error" id="errorMessage"></div>
+
+      <div class="section">
+        <h2>Status</h2>
+        <div class="info-group">
+          <span class="info-label">Connection</span>
+          <span
+            class="status-badge"
+            id="statusBadge"
+            style="background: #ffebee; color: #c62828"
+            >Offline</span
+          >
+        </div>
+        <div class="info-group">
+          <span class="info-label">Agent ID</span>
+          <span class="info-value" id="agentId">-</span>
+        </div>
+        <div class="info-group">
+          <span class="info-label">User</span>
+          <span class="info-value" id="userEmail">-</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Statistics</h2>
+        <div class="info-group">
+          <span class="info-label">💾 Databases</span>
+          <span class="info-value" id="databases">-</span>
+        </div>
+        <div class="info-group">
+          <span class="info-label">📦 Active Jobs</span>
+          <span class="info-value" id="jobs">-</span>
+        </div>
+      </div>
+
+      <div class="section">
+        <h2>Preferences</h2>
+        <div class="checkbox-group">
+          <input type="checkbox" id="autoStart" />
+          <label for="autoStart">Start with Windows</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="showNotifications" />
+          <label for="showNotifications">Show notifications</label>
+        </div>
+        <div class="checkbox-group">
+          <input type="checkbox" id="autoUpdate" />
+          <label for="autoUpdate">Auto-update agent</label>
+        </div>
+      </div>
+
+      <div class="button-group">
+        <button class="btn-primary" id="saveBtn">Save Settings</button>
+        <button class="btn-secondary" id="refreshBtn">Refresh Stats</button>
+      </div>
+
+      <div class="button-group" style="margin-top: 10px">
+        <button class="btn-secondary" id="dashboardBtn">Go to Web Dashboard</button>
+        <button class="btn-danger" id="logoutBtn">Logout</button>
+      </div>
+    </div>
+
+    <script>
+      const { ipcRenderer, shell } = require('electron');
+
+      // Elements
+      const statusBadge = document.getElementById('statusBadge');
+      const agentId = document.getElementById('agentId');
+      const userEmail = document.getElementById('userEmail');
+      const databases = document.getElementById('databases');
+      const jobs = document.getElementById('jobs');
+      const autoStart = document.getElementById('autoStart');
+      const showNotifications = document.getElementById('showNotifications');
+      const autoUpdate = document.getElementById('autoUpdate');
+      const saveBtn = document.getElementById('saveBtn');
+      const refreshBtn = document.getElementById('refreshBtn');
+      const dashboardBtn = document.getElementById('dashboardBtn');
+      const logoutBtn = document.getElementById('logoutBtn');
+      const successMessage = document.getElementById('successMessage');
+      const errorMessage = document.getElementById('errorMessage');
+
+      // Load settings
+      async function loadSettings() {
+        try {
+          const settings = await ipcRenderer.invoke('get-settings');
+
+          agentId.textContent = settings.agentId || '-';
+          userEmail.textContent = settings.userEmail || '-';
+
+          if (settings.isConnected) {
+            statusBadge.textContent = 'Connected';
+            statusBadge.className = 'status-badge status-online';
+          } else {
+            statusBadge.textContent = 'Disconnected';
+            statusBadge.className = 'status-badge status-offline';
+          }
+
+          autoStart.checked = settings.autoStart;
+          showNotifications.checked = settings.showNotifications;
+          autoUpdate.checked = settings.autoUpdate;
+        } catch (error) {
+          console.error('Error loading settings:', error);
+        }
+      }
+
+      // Load stats
+      async function loadStats() {
+        try {
+          const result = await ipcRenderer.invoke('get-stats');
+          if (result.success) {
+            databases.textContent = result.data.databases || 0;
+            jobs.textContent = result.data.jobs || 0;
+          }
+        } catch (error) {
+          console.error('Error loading stats:', error);
+        }
+      }
+
+      // Save settings
+      saveBtn.addEventListener('click', async () => {
+        try {
+          const result = await ipcRenderer.invoke('update-settings', {
+            autoStart: autoStart.checked,
+            showNotifications: showNotifications.checked,
+            autoUpdate: autoUpdate.checked,
+          });
+
+          if (result.success) {
+            successMessage.textContent = 'Settings saved successfully!';
+            successMessage.style.display = 'block';
+            errorMessage.style.display = 'none';
+
+            setTimeout(() => {
+              successMessage.style.display = 'none';
+            }, 3000);
+          }
+        } catch (error) {
+          errorMessage.textContent = 'Error saving settings: ' + error.message;
+          errorMessage.style.display = 'block';
+          successMessage.style.display = 'none';
+        }
+      });
+
+      // Refresh stats
+      refreshBtn.addEventListener('click', () => {
+        loadStats();
+      });
+
+      // Go to dashboard
+      dashboardBtn.addEventListener('click', () => {
+        const serverUrl = 'http://localhost:3000'; // TODO: Get from config
+        shell.openExternal(serverUrl);
+      });
+
+      // Logout
+      logoutBtn.addEventListener('click', async () => {
+        if (confirm('Are you sure you want to logout?')) {
+          await ipcRenderer.invoke('logout');
+          window.close();
+        }
+      });
+
+      // Load initial data
+      loadSettings();
+      loadStats();
+
+      // Refresh stats every 30 seconds
+      setInterval(loadStats, 30000);
+    </script>
+  </body>
+</html>

@@ -1,0 +1,21 @@
+{
+  "name": "rahat-backup-agent",
+  "productName": "Rahat Backup Agent",
+  "version": "1.0.0",
+  "description": "Desktop agent for Rahat Backup - local database backup executor",
+  "main": "src/main.js",
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron . --dev"
+  },
+  "keywords": ["backup", "database", "agent", "electron"],
+  "author": "Rahat Backup",
+  "license": "MIT",
+  "dependencies": {
+    "axios": "^1.13.2",
+    "electron": "^39.2.3",
+    "electron-store": "^11.0.2",
+    "uuid": "^13.0.0",
+    "ws": "^8.18.3"
+  }
+}

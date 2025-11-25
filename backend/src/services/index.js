@@ -7,3 +7,5 @@ module.exports.backupService = require('./backup.service');
 module.exports.scheduleService = require('./schedule.service');
 module.exports.cloudStorageService = require('./cloudStorage.service');
 module.exports.auditLogService = require('./auditLog.service');
+module.exports.agentService = require('./agent.service');
+module.exports.websocketService = require('./websocket.service');

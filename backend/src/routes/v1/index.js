@@ -5,6 +5,7 @@ const databaseRoute = require('./database.route');
 const backupRoute = require('./backup.route');
 const notificationRoute = require('./notification.route');
 const cloudStorageRoute = require('./cloudStorage.route');
+const agentRoute = require('./agent.route');
 const docsRoute = require('./docs.route');
 const config = require('../../config/config');
 
@@ -34,6 +35,10 @@ const defaultRoutes = [
   {
     path: '/cloud-storage',
     route: cloudStorageRoute,
+  },
+  {
+    path: '/agent',
+    route: agentRoute,
   },
 ];
 
