@@ -1,0 +1,10 @@
+{
+  "typescript.tsdk": "node_modules/typescript/lib",
+  "typescript.disableAutomaticTypeAcquisition": false,
+  "files.exclude": {
+    "**/node_modules/@aws-crypto": true
+  },
+  "search.exclude": {
+    "**/node_modules": true
+  }
+}
