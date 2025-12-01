@@ -38,6 +38,17 @@ const backupJobModel = {
     });
   },
 
+  getJobsByDatabaseIds: async (databaseIds) => {
+    return prisma.backupJob.findMany({
+      where: {
+        databaseId: {
+          in: databaseIds,
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  },
+
   findByUserId: async (userId, filters = {}) => {
     const where = {
       database: {

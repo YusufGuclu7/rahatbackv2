@@ -1,13 +1,17 @@
 const app = require('./app');
 const config = require('./config/config');
 const logger = require('./config/logger');
-const { scheduleService } = require('./services');
+const { scheduleService, websocketService } = require('./services');
 
 const server = app.listen(config.port, () => {
   logger.info(`Listening to port ${config.port}`);
 
   // Initialize scheduled backup jobs
   scheduleService.initializeScheduledJobs();
+
+  // Initialize WebSocket server for agent communication
+  websocketService.initializeWebSocketServer(server);
+  logger.info('WebSocket server initialized for desktop agents');
 });
 const exitHandler = () => {
   if (server) {
@@ -37,3 +41,4 @@ process.on('SIGTERM', () => {
     server.close();
   }
 });
+
